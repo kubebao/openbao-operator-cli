@@ -34,7 +34,8 @@ Write clear technical English for developers and operators. Use short, direct se
 
 ## Local work
 
-- Use conventional branch names such as `feat/cluster-status` and scoped Conventional Commits.
+- During initial development, work directly on `main`. Do not open pull requests unless requested.
+- Use scoped Conventional Commits. When a branch is requested, use a conventional name such as `feat/cluster-status`.
 - Sign off commits under the Developer Certificate of Origin.
 - Preserve other repositories and existing local environments. Use isolated clusters for integration tests.
 - Update documentation when command behavior or support boundaries change.

@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -20,6 +21,10 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	command.SetErr(stderr)
 	if err := command.ExecuteContext(ctx); err != nil {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		var result interface{ ExitCode() int }
+		if errors.As(err, &result) {
+			return result.ExitCode()
+		}
 		return 1
 	}
 	return 0
@@ -30,8 +35,8 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 		Use:   "kubebao",
 		Short: "Companion CLI for the OpenBao Operator",
 		Long: "kubebao is a companion CLI for the OpenBao Operator.\n\n" +
-			"This development scaffold provides help and build information.\n" +
-			"Cluster diagnostics, support bundles, and operator controls are planned.",
+			"Read cluster status through Kubernetes with your kubeconfig.\n" +
+			"Diagnosis, support bundles, and operator controls are planned.",
 		Version:       info.String(),
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
@@ -44,7 +49,7 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.AddCommand(newVersionCommand(info))
+	root.AddCommand(newVersionCommand(info), newStatusCommand(info))
 	return root
 }
 

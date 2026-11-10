@@ -8,7 +8,15 @@ issues or pull requests.
 
 ## Implementation boundaries
 
-The current executable only prints help and build information. It does not access Kubernetes or OpenBao.
+The status command reads the named `OpenBaoCluster` and API discovery endpoints through the caller's kubeconfig. It
+does not read Secrets, query OpenBao, or mutate Kubernetes. Standard kubeconfig authentication can invoke credential
+plugins configured by the caller.
+
+Status projects approved fields and applies additional redaction to known credential assignments and bearer tokens in
+diagnostic text. It excludes arbitrary annotations, configuration payloads, backup object paths, and break-glass nonces.
+Free-form diagnostic text can still contain sensitive information; review output before sharing it. The CLI classifies
+Kubernetes errors instead of returning API response bodies. Credential plugins can write their own diagnostics to
+standard error as part of their normal behavior.
 
 Planned collectors use approved field projections and exclude Secret reads by default. Logs require a separate option
 because they can contain credentials or application data. Redaction cannot guarantee that a bundle contains no sensitive

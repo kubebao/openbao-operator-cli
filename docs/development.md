@@ -7,6 +7,7 @@
 | `cmd/kubebao` | Process entry point |
 | `internal/cli` | Commands, output handling, and process result codes |
 | `internal/buildinfo` | Version, commit, and runtime metadata |
+| `internal/status` | Kubernetes collection, approved v1alpha1 projections, status model, and rendering |
 | `scripts` | Local distribution packaging and dependency license generation |
 | `.github` | CI workflows and contribution templates |
 

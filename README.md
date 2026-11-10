@@ -2,8 +2,8 @@
 
 Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
 
-This repository contains the initial CLI scaffold. It currently provides help and build information. Cluster
-diagnostics, support bundles, and operator controls are planned and are not implemented.
+The CLI reports operator-published cluster status and build information. Diagnosis, support bundles, and operator
+controls are planned and are not implemented.
 
 ## Build and run
 
@@ -16,15 +16,29 @@ make build
 ./bin/kubebao version --output json
 ```
 
-These commands require no kubeconfig, Kubernetes cluster, console, or backend service.
+Help and version commands require no kubeconfig, Kubernetes cluster, console, or backend service.
 
 Version JSON uses `schemaVersion: "v1"` and contains `version`, `commit`, `goVersion`, `os`, and `arch` string fields.
 Successful commands return exit code `0`. Invalid input or an execution failure returns `1`. Command results go to
 standard output; errors go to standard error.
 
+## Cluster status
+
+```sh
+./bin/kubebao status prod -n security
+./bin/kubebao status prod -n security --verbose
+./bin/kubebao status prod -n security --output json
+./bin/kubebao status prod -n security --watch
+```
+
+Status uses standard kubeconfig loading. Select a context with `--context` or a file with `--kubeconfig`. The command
+reads the named `OpenBaoCluster` and API discovery endpoints. It reports operator observations without probing OpenBao,
+reading Secrets, or changing cluster state. See [status](docs/status.md) for output, permissions, watch behavior, and
+interpretation limits.
+
 ## Planned scope
 
-- Cluster status and progress reporting.
+- Extend status with related-resource evidence and qualification against operator releases.
 - Evidence-backed diagnosis from operator conditions and related Kubernetes resources.
 - Local support bundles and offline diagnosis from the captured evidence.
 - Guarded pause, resume, and maintenance controls through the operator's public API.

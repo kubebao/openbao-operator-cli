@@ -22,7 +22,7 @@ func TestCommandOutputAndExitCodes(t *testing.T) {
 		{"help flag", []string{"--help"}, 0},
 		{"version flag", []string{"--version"}, 0},
 		{"version command", []string{"version"}, 0},
-		{"unknown command", []string{"status"}, 1},
+		{"unknown command", []string{"unknown-command"}, 1},
 		{"unknown flag", []string{"version", "--unknown"}, 1},
 		{"extra argument", []string{"version", "prod"}, 1},
 		{"invalid output", []string{"version", "--output", "yaml"}, 1},
