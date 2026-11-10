@@ -2,8 +2,8 @@
 
 Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
 
-The CLI reports operator-published cluster status and build information. Diagnosis, support bundles, and operator
-controls are planned and are not implemented.
+The CLI reports operator-published cluster status and diagnoses workload readiness and recovery restrictions.
+Support bundles and operator controls are planned and are not implemented.
 
 ## Build and run
 
@@ -36,10 +36,22 @@ reads the named `OpenBaoCluster` and API discovery endpoints. It reports operato
 reading Secrets, or changing cluster state. See [status](docs/status.md) for output, permissions, watch behavior, and
 interpretation limits.
 
+## Diagnosis
+
+```sh
+./bin/kubebao doctor prod -n security
+./bin/kubebao doctor prod -n security --output json
+./bin/kubebao doctor prod -n security --fail-on error
+```
+
+`doctor` adds bounded, ownership-aware StatefulSet, Pod, and restore collection. It reports findings with stable rule
+identifiers, resource and field references, suggested checks, and missing evidence. Rules consume captured observations
+without making network requests. See [diagnosis](docs/doctor.md) for permissions, initial rule coverage, and exit codes.
+
 ## Planned scope
 
 - Extend status with related-resource evidence and qualification against operator releases.
-- Evidence-backed diagnosis from operator conditions and related Kubernetes resources.
+- Extend diagnostic coverage to tenants, backup and upgrade failures, and integration conditions.
 - Local support bundles and offline diagnosis from the captured evidence.
 - Guarded pause, resume, and maintenance controls through the operator's public API.
 

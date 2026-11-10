@@ -1,4 +1,4 @@
-package status
+package collect
 
 import (
 	"bytes"
@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-cli/internal/status"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -61,8 +64,8 @@ func TestProjectionPreservesEvidenceAndExcludesSensitiveFields(t *testing.T) {
 		t.Fatal("known sensitive pattern was not redacted")
 	}
 	var rendered bytes.Buffer
-	report := Report{Target: Target{Context: "fixture", Namespace: "security", Name: "prod"}, Observation: o}
-	if err := Write(&rendered, report, "text", true); err != nil {
+	report := evidence.Snapshot{Target: evidence.Target{Context: "fixture", Namespace: "security", Name: "prod"}, Observation: o}
+	if err := status.Write(&rendered, report, "text", true); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(rendered.String(), "CANARY") || strings.Contains(rendered.String(), "FIXTURE_CREDENTIAL") {
@@ -106,7 +109,7 @@ func TestKnownCredentialPatterns(t *testing.T) {
 		"Authorization: Bearer PRIVATE_VALUE", `response {"root_token": "PRIVATE_VALUE"}`,
 		`password="PRIVATE_VALUE with spaces"`, "token=PRIVATE_VALUE",
 	} {
-		if result := clean(message); strings.Contains(result, "PRIVATE_VALUE") {
+		if result := evidence.Clean(message); strings.Contains(result, "PRIVATE_VALUE") {
 			t.Fatalf("known credential pattern was retained: %q", result)
 		}
 	}
@@ -114,7 +117,7 @@ func TestKnownCredentialPatterns(t *testing.T) {
 
 func TestControlCharactersAreRemoved(t *testing.T) {
 	t.Parallel()
-	result := clean("message\x1b[2J\nnext\rline")
+	result := evidence.Clean("message\x1b[2J\nnext\rline")
 	if strings.ContainsAny(result, "\x1b\n\r") {
 		t.Fatalf("unsafe terminal output: %q", result)
 	}

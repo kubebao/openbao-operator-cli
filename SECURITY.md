@@ -12,6 +12,11 @@ The status command reads the named `OpenBaoCluster` and API discovery endpoints 
 does not read Secrets, query OpenBao, or mutate Kubernetes. Standard kubeconfig authentication can invoke credential
 plugins configured by the caller.
 
+The doctor command also lists StatefulSet and Pod candidates using the documented cluster label, then verifies owner
+references and UIDs before including them. It inspects a bounded namespace list of restore requests because the API has
+no declared target-UID selector. Only requests correlated to the selected cluster UID or a documented cluster-side
+request UID are included. Unverified candidates produce named omissions and incomplete collection.
+
 Status projects approved fields and applies additional redaction to known credential assignments and bearer tokens in
 diagnostic text. It excludes arbitrary annotations, configuration payloads, backup object paths, and break-glass nonces.
 Free-form diagnostic text can still contain sensitive information; review output before sharing it. The CLI classifies
@@ -27,5 +32,6 @@ identity, unrelated configuration, and independent recovery restrictions. See [a
 
 ## Development checks
 
-Go security linting and `govulncheck` run in the normal CI workflows. CodeQL and dependency review are included but require
-separate enablement for this private repository. Their configuration is described in [development](docs/development.md).
+Run Go security linting and `govulncheck` locally while GitHub Actions is disabled. Workflow definitions include these
+checks, CodeQL, and dependency review. The latter two require separate enablement for this private repository. Their
+configuration is described in [development](docs/development.md).

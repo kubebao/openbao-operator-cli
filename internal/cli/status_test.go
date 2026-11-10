@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubebao/openbao-operator-cli/internal/status"
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
 func statusConfig(t *testing.T, server string) string {
@@ -101,7 +101,7 @@ func TestStatusUsesSelectedContextAndNamespace(t *testing.T) {
 			args := append([]string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--output", "json"}, tc.extra...)
 			var stdout, stderr bytes.Buffer
 			code := Execute(context.Background(), args, &stdout, &stderr)
-			var report status.Report
+			var report evidence.Snapshot
 			if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 				t.Fatalf("invalid output: %v; stderr: %s", err, &stderr)
 			}
@@ -134,7 +134,7 @@ func TestStatusWatchStopsAtResourceReplacement(t *testing.T) {
 		"--watch", "--watch-interval", "100ms", "--output", "json",
 	}, &stdout, &stderr)
 	decoder := json.NewDecoder(&stdout)
-	var initial, replaced status.Report
+	var initial, replaced evidence.Snapshot
 	if err := decoder.Decode(&initial); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestStatusIncompleteJSONDoesNotContainProviderErrors(t *testing.T) {
 		&stdout,
 		&stderr,
 	)
-	var report status.Report
+	var report evidence.Snapshot
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestStatusUsesKubeconfigEnvironment(t *testing.T) {
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("KUBECONFIG was not used: code %d; stderr %s", code, &stderr)
 	}
-	var report status.Report
+	var report evidence.Snapshot
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}

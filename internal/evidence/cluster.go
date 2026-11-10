@@ -1,10 +1,10 @@
-// Package status defines the projected evidence and rendering for cluster status.
-package status
+// Package evidence defines sanitized observations shared by commands and diagnostic rules.
+package evidence
 
 import "time"
 
-// Report describes a bounded collection attempt, not an atomic cluster snapshot.
-type Report struct {
+// Snapshot describes a bounded collection attempt, not an atomic cluster snapshot.
+type Snapshot struct {
 	SchemaVersion string       `json:"schemaVersion"`
 	ResultCode    string       `json:"resultCode"`
 	ExitCode      int          `json:"exitCode"`
@@ -13,6 +13,7 @@ type Report struct {
 	Target        Target       `json:"target"`
 	Observation   *Observation `json:"observation"`
 	Collection    []Step       `json:"collection"`
+	Related       *Related     `json:"related,omitempty"`
 }
 
 type Target struct {
@@ -26,6 +27,10 @@ type Target struct {
 }
 
 type Step struct {
+	Generation      *int64    `json:"generation,omitempty"`
+	Resource        string    `json:"resource,omitempty"`
+	Namespace       string    `json:"namespace,omitempty"`
+	Name            string    `json:"name,omitempty"`
 	APIGroup        string    `json:"apiGroup"`
 	Action          string    `json:"action"`
 	Outcome         string    `json:"outcome"`
@@ -54,6 +59,7 @@ type Observation struct {
 	Paused                 *bool            `json:"paused"`
 	MaintenanceEnabled     *bool            `json:"maintenanceEnabled"`
 	MaintenancePropagation string           `json:"maintenancePropagation"`
+	RestoreOrigin          string           `json:"restoreOrigin,omitempty"`
 	RestoreHold            string           `json:"restoreHold"`
 	OperationLock          *OperationLock   `json:"operationLock"`
 	BreakGlass             *BreakGlass      `json:"breakGlass"`

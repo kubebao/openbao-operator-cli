@@ -2,13 +2,17 @@
 
 ## Current implementation
 
-The Go executable provides cluster status, help, version output, build metadata, local archive packaging, and development
-checks. Status reads one named `OpenBaoCluster` through the caller's kubeconfig and projects public v1alpha1 fields into
-a typed observation. It supports both known API groups, explicit group selection, and UID-pinned polling in watch mode.
+The Go executable provides cluster status, workload and recovery diagnosis, help, version output, build metadata, local
+archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the caller's kubeconfig and
+projects public v1alpha1 fields into a typed observation. It supports both known API groups, explicit group selection,
+and UID-pinned polling in watch mode.
 
 The first status implementation does not collect related workloads or restore requests. It reports the restore-hold
 annotation and legacy cluster restore fields, with their limits identified. Maintenance annotation propagation and current
-`OpenBaoRestore` progress remain uncollected. See [status](status.md).
+`OpenBaoRestore` progress remain uncollected by status. See [status](status.md).
+
+`doctor` adds bounded collection of associated StatefulSets, Pods, and restore requests. Pure rules explain readiness and
+recovery restrictions from that captured evidence. It does not change cluster state or collect logs. See [diagnosis](doctor.md).
 
 ## Planned first release
 
@@ -29,10 +33,12 @@ The implementation will separate:
 - Guarded control requests and their verification predicates.
 - Human-readable and versioned JSON rendering.
 
-`internal/status` currently contains collection, the v1alpha1 projection, and rendering in separate files. Diagnostic
-rules, bundles, and controls are not implemented. Add feature packages with their first capability. Share evidence
-semantics and representative fixtures with the console; extract a public interpretation package after its boundary is
-established.
+`internal/evidence` holds shared observations and sanitization. `internal/collect` handles Kubernetes access, ownership
+association, and version-specific projections. `internal/status` renders status. `internal/doctor` interprets observations
+and renders findings without importing Kubernetes clients. Bundle handling and controls are not implemented.
+
+Share evidence semantics and representative fixtures with the console. Extract a public interpretation package after
+its boundary is established.
 
 ## Evidence and bundles
 
@@ -71,7 +77,7 @@ contract. No operator release is qualified by this scaffold.
 ## Planned command results
 
 Help and version use `0` for completion and `1` for invalid input or execution failure. Status also uses `3` when collection
-is incomplete. Diagnostic and control commands will use:
+is incomplete. Doctor uses:
 
 - `2`: diagnosis finds an issue at or above the selected failure threshold.
 - `3`: collection or verification is incomplete, including an unresolved outcome after submission.

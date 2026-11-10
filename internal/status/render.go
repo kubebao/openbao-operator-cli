@@ -8,9 +8,11 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
-func Write(writer io.Writer, report Report, output string, verbose bool) error {
+func Write(writer io.Writer, report evidence.Snapshot, output string, verbose bool) error {
 	if output == "json" {
 		if err := json.NewEncoder(writer).Encode(report); err != nil {
 			return fmt.Errorf("write status JSON: %w", err)
@@ -50,7 +52,7 @@ func Write(writer io.Writer, report Report, output string, verbose bool) error {
 	return nil
 }
 
-func writeObservation(buffer *strings.Builder, report Report, verbose bool) {
+func writeObservation(buffer *strings.Builder, report evidence.Snapshot, verbose bool) {
 	o := report.Observation
 	buffer.WriteString("\n")
 	table := tabwriter.NewWriter(buffer, 0, 4, 2, ' ', 0)
@@ -118,10 +120,10 @@ func writeObservation(buffer *strings.Builder, report Report, verbose bool) {
 	}
 }
 
-func writeMessages(buffer *strings.Builder, o *Observation) {
+func writeMessages(buffer *strings.Builder, o *evidence.Observation) {
 	for _, entry := range []struct {
 		name  string
-		value *ControllerError
+		value *evidence.ControllerError
 	}{
 		{"Workload error", o.WorkloadError}, {"Admin operation error", o.AdminOpsError},
 	} {
@@ -140,7 +142,7 @@ func writeMessages(buffer *strings.Builder, o *Observation) {
 	}
 }
 
-func conditionSummary(condition Condition) string {
+func conditionSummary(condition evidence.Condition) string {
 	return condition.Status + " (" + condition.Reason + "); generation " + number(condition.ObservedGeneration) +
 		"; matches current generation: " + boolean(condition.GenerationCurrent)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
+	"github.com/kubebao/openbao-operator-cli/internal/collect"
 	"github.com/kubebao/openbao-operator-cli/internal/status"
 )
 
@@ -20,7 +21,7 @@ func (r commandResult) Error() string { return r.message }
 func (r commandResult) ExitCode() int { return r.code }
 
 func newStatusCommand(info buildinfo.Info) *cobra.Command {
-	options := status.Options{RequestTimeout: 30 * time.Second, UserAgent: "kubebao/" + info.Version}
+	options := collect.Options{RequestTimeout: 30 * time.Second, UserAgent: "kubebao/" + info.Version}
 	output := "text"
 	verbose, watch := false, false
 	interval := 2 * time.Second
@@ -39,7 +40,7 @@ func newStatusCommand(info buildinfo.Info) *cobra.Command {
 				return errors.New("watch interval must be at least 100ms")
 			}
 			options.Name = args[0]
-			client, err := status.NewClient(options)
+			client, err := collect.NewClient(options)
 			if err != nil {
 				return err
 			}
@@ -68,11 +69,7 @@ func newStatusCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	flags := command.Flags()
-	flags.StringVar(&options.Kubeconfig, "kubeconfig", "", "Path to kubeconfig; defaults to standard kubeconfig loading")
-	flags.StringVar(&options.Context, "context", "", "Kubernetes context; defaults to the current context")
-	flags.StringVarP(&options.Namespace, "namespace", "n", "", "Namespace; defaults to the selected context namespace")
-	flags.StringVar(&options.APIGroup, "api-group", "", "Select openbao.org or kubebao.org when needed")
-	flags.DurationVar(&options.RequestTimeout, "request-timeout", options.RequestTimeout, "Maximum duration of each collection attempt")
+	addKubernetesFlags(command, &options)
 	flags.StringVarP(&output, "output", "o", output, "Output format: text or json (newline-delimited in watch mode)")
 	flags.BoolVarP(&verbose, "verbose", "v", verbose, "Include condition messages, evidence fields, and interpretation limits")
 	flags.BoolVarP(&watch, "watch", "w", watch, "Refresh the selected resource until interrupted or collection fails")

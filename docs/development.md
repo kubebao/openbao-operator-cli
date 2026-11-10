@@ -7,7 +7,10 @@
 | `cmd/kubebao` | Process entry point |
 | `internal/cli` | Commands, output handling, and process result codes |
 | `internal/buildinfo` | Version, commit, and runtime metadata |
-| `internal/status` | Kubernetes collection, approved v1alpha1 projections, status model, and rendering |
+| `internal/evidence` | Shared typed observations, references, and sanitization |
+| `internal/collect` | Kubernetes access, ownership association, and approved projections |
+| `internal/status` | Human-readable and JSON status rendering |
+| `internal/doctor` | Pure diagnostic rules, coverage results, and findings rendering |
 | `scripts` | Local distribution packaging and dependency license generation |
 | `.github` | CI workflows and contribution templates |
 
@@ -49,7 +52,10 @@ coverage; it does not establish runtime or operator compatibility qualification.
 
 ## Continuous integration
 
-The Check workflow runs on pull requests, pushes to `main`, and merge groups. It runs Go checks, vulnerability analysis,
+GitHub Actions is currently disabled during initial development. Run the Make checks locally before pushing changes.
+
+When Actions is enabled, the Check workflow runs on pull requests, pushes to `main`, and merge groups. It runs Go checks,
+vulnerability analysis,
 dependency notice verification, and four-platform archive builds. Archives are retained as workflow artifacts. No
 workflow publishes a release or deploys an environment.
 
