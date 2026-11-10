@@ -1,0 +1,7 @@
+/bin/
+/dist/
+/coverage/
+/.local/
+/.state/
+/.env
+.DS_Store

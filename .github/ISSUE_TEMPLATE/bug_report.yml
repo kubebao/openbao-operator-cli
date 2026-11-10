@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible CLI defect or regression
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach credentials, kubeconfigs, unreviewed bundles, or sensitive logs.
+        Report suspected security vulnerabilities privately to a maintainer.
+  - type: input
+    id: version
+    attributes:
+      label: CLI version
+      description: Output of kubebao version.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS arm64
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the command, expected result, and actual result. Remove sensitive values.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include Kubernetes and operator versions when the issue involves a cluster.

@@ -1,0 +1,61 @@
+# kubebao
+
+Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
+
+This repository contains the initial CLI scaffold. It currently provides help and build information. Cluster
+diagnostics, support bundles, and operator controls are planned and are not implemented.
+
+## Build and run
+
+Use Go 1.27.3 or a newer compatible toolchain. Go can download the required toolchain when `GOTOOLCHAIN=auto`.
+
+```sh
+make build
+./bin/kubebao --help
+./bin/kubebao version
+./bin/kubebao version --output json
+```
+
+These commands require no kubeconfig, Kubernetes cluster, console, or backend service.
+
+Version JSON uses `schemaVersion: "v1"` and contains `version`, `commit`, `goVersion`, `os`, and `arch` string fields.
+Successful commands return exit code `0`. Invalid input or an execution failure returns `1`. Command results go to
+standard output; errors go to standard error.
+
+## Planned scope
+
+- Cluster status and progress reporting.
+- Evidence-backed diagnosis from operator conditions and related Kubernetes resources.
+- Local support bundles and offline diagnosis from the captured evidence.
+- Guarded pause, resume, and maintenance controls through the operator's public API.
+
+The operator retains responsibility for reconciliation and lifecycle safety. General OpenBao administration continues
+through `bao`. See [architecture and scope](docs/architecture.md) for the intended boundaries.
+
+## Development
+
+```sh
+make install
+make check
+make vulncheck
+make check-licenses
+```
+
+`make check` runs the pinned Go linters, race tests, and binary build. See [development](docs/development.md) and
+[contributing](CONTRIBUTING.md) for commands and conventions.
+
+## Local distribution archives
+
+```sh
+make dist VERSION=0.0.0-dev
+```
+
+This builds archives for Linux and macOS on amd64 and arm64, with license notices and `dist/checksums.txt`. It does not
+publish a release. Verify the checksums from the archive directory:
+
+```sh
+cd dist
+shasum -a 256 -c checksums.txt
+```
+
+The project uses the [Apache License 2.0](LICENSE). Bundled dependency notices are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
