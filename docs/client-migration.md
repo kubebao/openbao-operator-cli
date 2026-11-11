@@ -63,18 +63,31 @@ An inclusion guard checks the client license, and adjacent upstream NOTICE files
 The CLI repository remains private with GitHub Actions disabled. These are local results, not hosted CLI CI results.
 Client PR #17 passes its exact-head hosted checks and its signed squash merge matches the tested preview tree.
 
-## Uncompleted optional integration
+## Bounded operator integration
 
-A disposable `cli-client-m5` kind cluster uses Kubernetes 1.36.1 and operator/chart 0.6.1. The operator and a development
-cluster resource were installed, but OrbStack's Docker socket disappeared before scoped reader credentials could be
-issued. The CLI live collection check did not run and establishes no operator integration qualification.
-The shared Docker service was not restarted and existing environments were not changed.
+The qualified executable reports CLI commit `8cb99104e44974fd6bd8311f818cd9d7a1f36bfd`. A disposable `cli-client-m5` kind
+cluster runs Kubernetes 1.36.1 on Linux/arm64 with operator/chart 0.6.1. The first attempt stopped when OrbStack's Docker
+socket disappeared. Testing resumed after Docker returned, without restarting the shared service.
 
-Disposal remains pending while Docker is unavailable. When it returns, remove only this disposable cluster:
+| Installed artifact | Identity |
+| --- | --- |
+| Operator chart | `ghcr.io/kubebao/charts/openbao-operator:0.6.1`, digest `sha256:03bc763ade61590f3616bff2738b379453554084cee12aa61035503c3d9fc338` |
+| Running operator image | `ghcr.io/kubebao/openbao-operator@sha256:8a73e5a7c0f13d6786e7ca6d65af20cb36620d4464dc07a6e8210e59d17bcb97` |
+| Cluster CRD spec SHA-256 | `7c3659f144c375092d7d1629d65004c15cc30ec41dd81e04a400842ada82ed14` |
+| Restore CRD spec SHA-256 | `d3c781479988c032e00e45c6ec4c29f66aba1d11413f65f11f98dd0901b0ca64` |
 
-```sh
-kind delete cluster --name cli-client-m5 --kubeconfig .local/milestone-5/admin-kubeconfig
-```
+CRD hashes cover sorted, compact JSON of each installed `spec`. Commands use ten-minute ServiceAccount tokens in namespace
+`cli-sample`. The status reader can GET only the named cluster and cannot LIST Pods. The doctor reader adds namespace
+StatefulSet, Pod, and restore LIST permissions. Authorization checks deny Secret GET, cluster PATCH, and cluster LIST.
 
-The kubeconfig and test state remain under ignored `.local/milestone-5`. Console PR #24 stays private, open, and deferred.
-A common immutable client `v0` tag and both-consumer qualification remain milestone 6.
+Status exits zero after discovery and a named read. Watch retains the UID, omits rediscovery on the second poll, and exits
+zero after SIGINT. Doctor with status-only credentials reports denied related reads, exits three, and retains the
+independent cluster warning. Doctor with full reader permissions collects one StatefulSet, one Pod, and an empty restore
+list, then verifies the original cluster UID and generation. All collection steps complete. The Pending Pod lacks required
+readiness evidence, so the Pod rule remains incomplete and doctor exits three while retaining cluster and workload
+warnings. This result does not qualify healthy-cluster diagnosis, nonempty restore correlation, lifecycle operations,
+backup/upgrade execution, or another operator version.
+
+Approved JSON reports and summaries remain under ignored `.local/milestone-5`. The disposable cluster is deleted and
+scoped credential files are removed. Existing environments are preserved. Console PR #24 stays private, open, and
+deferred. A common immutable client `v0` tag and both-consumer qualification remain milestone 6.
