@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
 func statusConfig(t *testing.T, server string) string {
@@ -52,7 +50,7 @@ func statusServer(t *testing.T, namespace string, resource http.HandlerFunc) *ht
 		case "/apis/openbao.org/v1alpha1":
 			_, _ = fmt.Fprint(
 				w,
-				`{"apiVersion":"v1","kind":"APIResourceList","resources":[
+				`{"apiVersion":"v1","kind":"APIResourceList","groupVersion":"openbao.org/v1alpha1","resources":[
 				{"name":"openbaoclusters","kind":"OpenBaoCluster","namespaced":true}]}`,
 			)
 		case "/apis/kubebao.org/v1alpha1":
@@ -101,7 +99,7 @@ func TestStatusUsesSelectedContextAndNamespace(t *testing.T) {
 			args := append([]string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--output", "json"}, tc.extra...)
 			var stdout, stderr bytes.Buffer
 			code := Execute(context.Background(), args, &stdout, &stderr)
-			var report evidence.Snapshot
+			var report statusReport
 			if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 				t.Fatalf("invalid output: %v; stderr: %s", err, &stderr)
 			}
@@ -134,7 +132,7 @@ func TestStatusWatchStopsAtResourceReplacement(t *testing.T) {
 		"--watch", "--watch-interval", "100ms", "--output", "json",
 	}, &stdout, &stderr)
 	decoder := json.NewDecoder(&stdout)
-	var initial, replaced evidence.Snapshot
+	var initial, replaced statusReport
 	if err := decoder.Decode(&initial); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +160,7 @@ func TestStatusIncompleteJSONDoesNotContainProviderErrors(t *testing.T) {
 		&stdout,
 		&stderr,
 	)
-	var report evidence.Snapshot
+	var report statusReport
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +182,7 @@ func TestStatusUsesKubeconfigEnvironment(t *testing.T) {
 	if code != 0 || stderr.Len() != 0 {
 		t.Fatalf("KUBECONFIG was not used: code %d; stderr %s", code, &stderr)
 	}
-	var report evidence.Snapshot
+	var report statusReport
 	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +194,14 @@ func TestStatusUsesKubeconfigEnvironment(t *testing.T) {
 func TestStatusRejectsInputBeforeLoadingCredentials(t *testing.T) {
 	t.Parallel()
 	cases := [][]string{
-		{"--output", "yaml"}, {"--api-group", "arbitrary.example"}, {"--request-timeout", "0s"}, {"--watch-interval", "0s"},
+		{
+			"--output",
+			"yaml",
+		},
+		{"--api-group", "arbitrary.example"},
+		{"--api-group", "kubebao.org"},
+		{"--request-timeout", "0s"},
+		{"--watch-interval", "0s"},
 	}
 	for _, extra := range cases {
 		var stdout, stderr bytes.Buffer
@@ -207,5 +212,112 @@ func TestStatusRejectsInputBeforeLoadingCredentials(t *testing.T) {
 		if strings.Contains(stderr.String(), "cannot load kubeconfig") {
 			t.Fatalf("credentials loaded before input validation: %s", &stderr)
 		}
+	}
+}
+
+func TestStatusWatchStopsAfterDeletionWithoutRediscovery(t *testing.T) {
+	t.Parallel()
+	var reads atomic.Int32
+	server := statusServer(t, "context-namespace", func(w http.ResponseWriter, r *http.Request) {
+		if reads.Add(1) > 1 {
+			http.NotFound(w, r)
+			return
+		}
+		writeStatusFixture(w, "context-namespace", "original")
+	})
+	var stdout, stderr bytes.Buffer
+	code := Execute(
+		context.Background(),
+		[]string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--watch", "--watch-interval", "100ms", "-o", "json"},
+		&stdout,
+		&stderr,
+	)
+	decoder := json.NewDecoder(&stdout)
+	var initial, deleted statusReport
+	if decoder.Decode(&initial) != nil || decoder.Decode(&deleted) != nil {
+		t.Fatal("watch did not write complete JSON frames")
+	}
+	if code != 3 || reads.Load() != 2 || deleted.ResultCode != "resource_deleted" || deleted.Target.UID != "original" ||
+		deleted.Observation != nil {
+		t.Fatalf("deletion result: %d %+v", code, deleted)
+	}
+}
+
+func TestStatusNeverFollowsRedirectsOrExposesProviderText(t *testing.T) {
+	t.Parallel()
+	var leaked atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		leaked.Add(1)
+		_, _ = fmt.Fprint(w, "PRIVATE_REDIRECT_CANARY")
+	}))
+	defer other.Close()
+	server := statusServer(
+		t,
+		"context-namespace",
+		func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, other.URL, http.StatusFound) },
+	)
+	var stdout, stderr bytes.Buffer
+	code := Execute(
+		context.Background(),
+		[]string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "-o", "json"},
+		&stdout,
+		&stderr,
+	)
+	if code != 3 || leaked.Load() != 0 || strings.Contains(stdout.String()+stderr.String(), "PRIVATE_REDIRECT_CANARY") {
+		t.Fatal("redirect escaped the selected API endpoint")
+	}
+}
+
+func TestStatusTimeoutIsDistinctFromMissingTarget(t *testing.T) {
+	t.Parallel()
+	for _, timeout := range []bool{false, true} {
+		server := statusServer(t, "context-namespace", func(w http.ResponseWriter, r *http.Request) {
+			if timeout {
+				<-r.Context().Done()
+				return
+			}
+			http.NotFound(w, r)
+		})
+		var stdout, stderr bytes.Buffer
+		args := []string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--request-timeout", "30ms", "-o", "json"}
+		code := Execute(context.Background(), args, &stdout, &stderr)
+		var report statusReport
+		if json.Unmarshal(stdout.Bytes(), &report) != nil {
+			t.Fatal("result report missing")
+		}
+		want := 1
+		if timeout {
+			want = 3
+		}
+		if code != want || report.ExitCode != want {
+			t.Fatalf("timeout=%t code=%d report=%+v", timeout, code, report)
+		}
+	}
+}
+
+func TestInterruptedStatusWatchCancelsTheRead(t *testing.T) {
+	t.Parallel()
+	entered := make(chan struct{})
+	server := statusServer(t, "context-namespace", func(_ http.ResponseWriter, r *http.Request) { close(entered); <-r.Context().Done() })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan int, 1)
+	var stdout, stderr bytes.Buffer
+	go func() {
+		done <- Execute(ctx, []string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--watch"}, &stdout, &stderr)
+	}()
+	select {
+	case <-entered:
+		cancel()
+	case <-time.After(2 * time.Second):
+		t.Fatal("read did not start")
+	}
+	select {
+	case code := <-done:
+		if code != 0 || stdout.Len() != 0 {
+			t.Fatalf("interrupted watch: %d %s", code, &stdout)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("interruption did not cancel the read")
 	}
 }

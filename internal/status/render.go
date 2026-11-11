@@ -1,7 +1,6 @@
 package status
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -12,13 +11,7 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
-func Write(writer io.Writer, report evidence.Snapshot, output string, verbose bool) error {
-	if output == "json" {
-		if err := json.NewEncoder(writer).Encode(report); err != nil {
-			return fmt.Errorf("write status JSON: %w", err)
-		}
-		return nil
-	}
+func WriteText(writer io.Writer, report evidence.Snapshot, verbose, incomplete bool) error {
 	var buffer strings.Builder
 	fmt.Fprintf(&buffer, "Status: %s / %s/%s\n", report.Target.Context, report.Target.Namespace, report.Target.Name)
 	if o := report.Observation; o != nil {
@@ -40,10 +33,7 @@ func Write(writer io.Writer, report evidence.Snapshot, output string, verbose bo
 			fmt.Fprintf(&buffer, "Collection: %s %s: %s\n", step.APIGroup, step.Action, step.Outcome)
 		}
 	}
-	if report.ResultCode == "ambiguous_api_group" {
-		buffer.WriteString("Select the target with --api-group openbao.org or --api-group kubebao.org.\n")
-	}
-	if report.ExitCode == 3 {
+	if incomplete {
 		buffer.WriteString("Collection is incomplete; unavailable evidence remains unknown.\n")
 	}
 	if _, err := io.WriteString(writer, buffer.String()); err != nil {
@@ -109,36 +99,13 @@ func writeObservation(buffer *strings.Builder, report evidence.Snapshot, verbose
 	if verbose {
 		buffer.WriteString("\nConditions:\n")
 		for _, condition := range o.Conditions {
-			fmt.Fprintf(buffer, "  %s: %s\n    %s\n    %s; last transition %s\n",
-				condition.Type, conditionSummary(condition), known(condition.Message), condition.Field, known(condition.LastTransitionTime))
+			fmt.Fprintf(buffer, "  %s: %s\n    %s; last transition %s\n",
+				condition.Type, conditionSummary(condition), condition.Field, known(condition.LastTransitionTime))
 		}
-		writeMessages(buffer, o)
 		buffer.WriteString("\nInterpretation limits:\n")
 		for _, limitation := range o.Limitations {
 			fmt.Fprintf(buffer, "  - %s\n", limitation)
 		}
-	}
-}
-
-func writeMessages(buffer *strings.Builder, o *evidence.Observation) {
-	for _, entry := range []struct {
-		name  string
-		value *evidence.ControllerError
-	}{
-		{"Workload error", o.WorkloadError}, {"Admin operation error", o.AdminOpsError},
-	} {
-		if entry.value != nil {
-			fmt.Fprintf(buffer, "%s: %s: %s\n", entry.name, known(entry.value.Reason), known(entry.value.Message))
-		}
-	}
-	if o.Backup != nil && o.Backup.LastFailureMessage != "" {
-		fmt.Fprintf(buffer, "Last backup failure: %s\n", o.Backup.LastFailureMessage)
-	}
-	if o.Upgrade != nil && o.Upgrade.Failure != nil {
-		fmt.Fprintf(buffer, "Upgrade failure: %s: %s\n", o.Upgrade.Failure.Reason, o.Upgrade.Failure.Message)
-	}
-	if o.BreakGlass != nil && o.BreakGlass.Message != "" {
-		fmt.Fprintf(buffer, "Break glass: %s\n", o.BreakGlass.Message)
 	}
 }
 

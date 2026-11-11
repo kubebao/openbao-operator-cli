@@ -1,131 +1,150 @@
 package collect
 
 import (
-	"errors"
-	"sort"
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
-
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-// clusterV1Alpha1 is an allowlist for the public v1alpha1 resource.
-// It deliberately omits arbitrary annotations and configuration payloads.
-type clusterV1Alpha1 struct {
-	Metadata struct {
-		Generation *int64 `json:"generation"`
-	} `json:"metadata"`
-	Spec struct {
-		Version      string `json:"version"`
-		Replicas     *int64 `json:"replicas"`
-		ReadReplicas *struct {
-			Replicas *int64 `json:"replicas"`
-		} `json:"readReplicas"`
-		Paused      *bool `json:"paused"`
-		Maintenance *struct {
-			Enabled *bool `json:"enabled"`
-		} `json:"maintenance"`
-	} `json:"spec"`
-	Status struct {
-		ObservedGeneration *int64 `json:"observedGeneration"`
-		Phase              string `json:"phase"`
-		CurrentVersion     string `json:"currentVersion"`
-		ReadyReplicas      *int64 `json:"readyReplicas"`
-		ReadReplicas       *struct {
-			ReadyReplicas *int64 `json:"readyReplicas"`
-		} `json:"readReplicas"`
-		Conditions    []evidence.Condition    `json:"conditions"`
-		OperationLock *evidence.OperationLock `json:"operationLock"`
-		BreakGlass    *evidence.BreakGlass    `json:"breakGlass"`
-		Backup        *evidence.Backup        `json:"backup"`
-		Upgrade       *evidence.Upgrade       `json:"upgrade"`
-		BlueGreen     *evidence.BlueGreen     `json:"blueGreen"`
-		Restore       *evidence.LegacyRestore `json:"restore"`
-		Workload      *struct {
-			LastError *evidence.ControllerError `json:"lastError"`
-		} `json:"workload"`
-		AdminOps *struct {
-			LastError *evidence.ControllerError `json:"lastError"`
-		} `json:"adminOps"`
-	} `json:"status"`
+func text(value shared.Text) string {
+	if value.Value == nil {
+		return ""
+	}
+	return *value.Value
 }
 
-func ProjectV1Alpha1(object *unstructured.Unstructured, collectedAt time.Time) (*evidence.Observation, error) {
-	var source clusterV1Alpha1
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.Object, &source); err != nil {
-		return nil, errors.New("resource fields do not match the v1alpha1 status adapter")
+func timestamp(value shared.Timestamp) string {
+	if value.Value == nil {
+		return ""
 	}
+	return value.Value.UTC().Format(time.RFC3339Nano)
+}
+
+func acknowledged(state shared.GenerationState) *bool {
+	switch state {
+	case shared.GenerationCurrent:
+		value := true
+		return &value
+	case shared.GenerationStale, shared.GenerationInconsistent:
+		value := false
+		return &value
+	default:
+		return nil
+	}
+}
+
+func conditions(values shared.Conditions, generation shared.Integer, prefix string) []evidence.Condition {
+	result := []evidence.Condition{}
+	for _, c := range values.Values {
+		result = append(result, evidence.Condition{
+			Type:               c.Type,
+			Status:             string(c.Status),
+			Reason:             text(c.Reason),
+			ObservedGeneration: c.ObservedGeneration.Value,
+			LastTransitionTime: timestamp(
+				c.LastTransitionAt,
+			),
+			GenerationCurrent: acknowledged(c.Acknowledgement(generation)),
+			Field:             prefix + "[type=" + c.Type + "]",
+		})
+	}
+	return result
+}
+
+func controllerError(value shared.ControllerError) *evidence.ControllerError {
+	if value.State != shared.ObjectReported {
+		return nil
+	}
+	return &evidence.ControllerError{Reason: text(value.Reason), At: timestamp(value.At)}
+}
+
+// projectCluster maps approved normalized facts into the CLI's display model.
+// Empty message fields preserve JSON layout while excluding all provider text.
+func projectCluster(source shared.Cluster) *evidence.Observation {
 	o := &evidence.Observation{
-		CollectedAt: collectedAt, ResourceVersion: object.GetResourceVersion(),
-		Adapter: "openbaocluster-v1alpha1/v1", Qualification: "unqualified",
-		Generation: source.Metadata.Generation, ObservedGeneration: source.Status.ObservedGeneration,
-		GenerationCurrent: evidence.GenerationCurrent(source.Metadata.Generation, source.Status.ObservedGeneration),
-		Phase:             source.Status.Phase, DesiredVersion: source.Spec.Version, ObservedVersion: source.Status.CurrentVersion,
-		Voters: evidence.Replicas{Desired: source.Spec.Replicas, Ready: source.Status.ReadyReplicas},
-		Paused: source.Spec.Paused, MaintenancePropagation: "not_collected",
-		OperationLock: source.Status.OperationLock, BreakGlass: source.Status.BreakGlass,
-		Backup: source.Status.Backup, Upgrade: source.Status.Upgrade, BlueGreen: source.Status.BlueGreen,
-		LegacyRestore: source.Status.Restore, Conditions: source.Status.Conditions,
-		Attention: []evidence.Attention{},
+		CollectedAt:        *source.Reference.CollectedAt.Value,
+		ResourceVersion:    text(source.Reference.ResourceVersion),
+		Adapter:            source.AdapterContract,
+		Qualification:      "unqualified",
+		Generation:         source.Generation.Value,
+		ObservedGeneration: source.ObservedGeneration.Value,
+		GenerationCurrent:  acknowledged(source.Acknowledgement()),
+		Phase:              text(source.Phase),
+		DesiredVersion:     text(source.DesiredVersion),
+		ObservedVersion:    text(source.ObservedVersion),
+		Voters: evidence.Replicas{
+			Desired: source.DesiredReplicas.Value,
+			Ready:   source.ReadyReplicas.Value,
+		},
+		ReadReplicas:           evidence.Replicas{Desired: source.ReadReplicas.Desired.Value, Ready: source.ReadReplicas.Ready.Value},
+		Paused:                 source.Paused.Value,
+		MaintenanceEnabled:     source.Maintenance.Enabled.Value,
+		MaintenancePropagation: "not_collected",
+		RestoreOrigin: text(
+			source.RestoreOrigin,
+		),
+		RestoreHold:   text(source.RestoreHold),
+		WorkloadError: controllerError(source.WorkloadError),
+		AdminOpsError: controllerError(source.AdminOpsError),
+		Conditions:    conditions(source.Conditions, source.Generation, "status.conditions"),
+		Attention:     []evidence.Attention{},
 		Limitations: []string{
-			"No operator release is qualified; known v1alpha1 fields are projected with interpretation limits.",
-			"Collection time is not the time of the operator's observation; no reconciliation heartbeat is available.",
-			"Cluster fields alone do not verify maintenance propagation or current restore progress.",
-			"OpenBao service-registration conditions report labels, not independent health probes.",
+			"The adapter contract records inspected source semantics, not operator-release qualification.",
+			"Collection time is not an operator heartbeat; condition transitions are not producer observation times.",
+			"Cluster fields do not verify maintenance propagation or current restore progress.",
+			"Provider messages are excluded, including verbose and JSON output.",
 		},
 	}
-	if source.Spec.ReadReplicas != nil {
-		o.ReadReplicas.Desired = source.Spec.ReadReplicas.Replicas
-	}
-	if source.Status.ReadReplicas != nil {
-		o.ReadReplicas.Ready = source.Status.ReadReplicas.ReadyReplicas
-	}
-	if source.Spec.Maintenance != nil {
-		o.MaintenanceEnabled = source.Spec.Maintenance.Enabled
-	}
-	// API-group migration preserves these documented annotation keys.
-	if value, found, err := unstructured.NestedString(object.Object, "metadata", "annotations", "openbao.org/restore-hold"); err != nil {
-		return nil, errors.New("restore hold does not match the v1alpha1 status adapter")
-	} else if found {
-		o.RestoreHold = value
-	}
-	if origin, found, err := unstructured.NestedString(object.Object, "metadata", "annotations", "openbao.org/restore-origin"); err != nil {
-		return nil, errors.New("restore origin does not match the v1alpha1 status adapter")
-	} else if found {
-		o.RestoreOrigin = origin
-	}
-	if source.Status.Workload != nil {
-		o.WorkloadError = source.Status.Workload.LastError
-	}
-	if source.Status.AdminOps != nil {
-		o.AdminOpsError = source.Status.AdminOps.LastError
-	}
-	if o.Conditions == nil {
-		o.Conditions = []evidence.Condition{}
-	}
-	seen := map[string]bool{}
-	for i := range o.Conditions {
-		condition := &o.Conditions[i]
-		if condition.Type == "" || seen[condition.Type] {
-			return nil, errors.New("condition types are empty or duplicated")
-		}
-		seen[condition.Type] = true
-		if condition.Status != "True" && condition.Status != "False" && condition.Status != "Unknown" {
-			return nil, errors.New("condition status does not match the v1alpha1 status adapter")
-		}
-		condition.GenerationCurrent = evidence.GenerationCurrent(o.Generation, condition.ObservedGeneration)
-		condition.Field = "status.conditions[type=" + evidence.Clean(condition.Type) + "]"
-		evidence.CleanStrings(&condition.Type, &condition.Status, &condition.Reason, &condition.Message, &condition.LastTransitionTime)
-	}
-	sort.Slice(o.Conditions, func(i, j int) bool { return o.Conditions[i].Type < o.Conditions[j].Type })
 	for i := range o.Conditions {
 		if o.Conditions[i].Type == "Available" {
 			o.Available = &o.Conditions[i]
 		}
 	}
-	evidence.SanitizeObservation(o)
-	o.Attention = evidence.ClusterAttention(o)
-	return o, nil
+	if v := source.OperationLock; v.State == shared.ObjectReported {
+		o.OperationLock = &evidence.OperationLock{
+			Operation:  text(v.Operation),
+			Holder:     text(v.Holder),
+			AcquiredAt: timestamp(v.AcquiredAt),
+			RenewedAt:  timestamp(v.RenewedAt),
+		}
+	}
+	if v := source.BreakGlass; v.State == shared.ObjectReported {
+		o.BreakGlass = &evidence.BreakGlass{Active: v.Active.Value, Reason: text(v.Reason), EnteredAt: timestamp(v.EnteredAt)}
+	}
+	if v := source.Backup; v.State == shared.ObjectReported {
+		o.Backup = &evidence.Backup{
+			LastBackupTime:      timestamp(v.LastSuccessAt),
+			LastAttemptTime:     timestamp(v.LastAttemptAt),
+			NextScheduledBackup: timestamp(v.NextScheduledAt),
+			ConsecutiveFailures: v.ConsecutiveFailures.Value,
+			LastFailureReason:   text(v.LastFailureReason),
+			LastFailureTime:     timestamp(v.LastFailureAt),
+		}
+	}
+	if v := source.Upgrade; v.State == shared.ObjectReported {
+		o.Upgrade = &evidence.Upgrade{
+			ExecutionID:      text(v.ExecutionID),
+			TargetVersion:    text(v.TargetVersion),
+			FromVersion:      text(v.FromVersion),
+			StartedAt:        timestamp(v.StartedAt),
+			CurrentPartition: v.CurrentPartition.Value,
+			CompletedPods:    v.CompletedPods.Values,
+			Failure:          controllerError(v.Failure),
+		}
+	}
+	if v := source.BlueGreen; v.State == shared.ObjectReported {
+		o.BlueGreen = &evidence.BlueGreen{
+			Phase:           text(v.Phase),
+			OperationID:     text(v.OperationID),
+			GreenVersion:    text(v.GreenVersion),
+			StartTime:       timestamp(v.StartedAt),
+			JobFailureCount: v.JobFailureCount.Value,
+			LastJobFailure:  text(v.LastFailedJob),
+		}
+	}
+	if v := source.LegacyRestore; v.State == shared.ObjectReported {
+		o.LegacyRestore = &evidence.LegacyRestore{Name: text(v.Name), UID: text(v.UID), RestartCompletedAt: timestamp(v.RestartCompletedAt)}
+	}
+	return o
 }

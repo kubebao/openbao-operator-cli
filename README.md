@@ -7,7 +7,7 @@ Support bundles and operator controls are planned and are not implemented.
 
 ## Build and run
 
-Use Go 1.27.3 or a newer compatible toolchain. Go can download the required toolchain when `GOTOOLCHAIN=auto`.
+Use Go 1.27.4 or a newer compatible toolchain. Go can download the required toolchain when `GOTOOLCHAIN=auto`.
 
 ```sh
 make build

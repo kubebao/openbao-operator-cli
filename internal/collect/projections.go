@@ -1,213 +1,152 @@
 package collect
 
 import (
-	"errors"
-	"time"
-
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	clientcollect "github.com/kubebao/openbao-operator-client/collect"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-func reference(object *unstructured.Unstructured) evidence.Reference {
+func reference(ref shared.Reference) evidence.Reference {
 	return evidence.Reference{
-		APIVersion: evidence.Clean(object.GetAPIVersion()), Kind: evidence.Clean(object.GetKind()),
-		Namespace: evidence.Clean(object.GetNamespace()), Name: evidence.Clean(object.GetName()),
-		UID: evidence.Clean(string(object.GetUID())), ResourceVersion: evidence.Clean(object.GetResourceVersion()),
-		CollectedAt: time.Now().UTC(),
+		APIVersion:      ref.APIVersion,
+		Kind:            ref.Identity.Kind,
+		Namespace:       ref.Identity.Namespace,
+		Name:            ref.Identity.Name,
+		UID:             ref.Identity.UID,
+		ResourceVersion: text(ref.ResourceVersion),
+		CollectedAt:     *ref.CollectedAt.Value,
+		Field:           ref.Field,
 	}
 }
 
-func maintenanceAnnotation(object *unstructured.Unstructured) *string {
-	value, ok := object.GetAnnotations()["openbao.org/maintenance"]
-	if !ok {
-		return nil
+func projectRelated(source clientcollect.RelatedResult) *evidence.Related {
+	result := &evidence.Related{
+		StatefulSets: []evidence.StatefulSet{},
+		Pods:         []evidence.Pod{},
+		Restores:     []evidence.Restore{},
+		Omissions:    []evidence.Omission{},
 	}
-	value = evidence.Clean(value)
-	return &value
-}
-
-func projectStatefulSet(object *unstructured.Unstructured, association evidence.Association) (evidence.StatefulSet, error) {
-	var wire struct {
-		Metadata struct {
-			Generation *int64 `json:"generation"`
-		} `json:"metadata"`
-		Spec struct {
-			Replicas *int64 `json:"replicas"`
-		} `json:"spec"`
-		Status struct {
-			ObservedGeneration *int64 `json:"observedGeneration"`
-			ReadyReplicas      *int64 `json:"readyReplicas"`
-		} `json:"status"`
-	}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.Object, &wire); err != nil {
-		return evidence.StatefulSet{}, errors.New("invalid StatefulSet projection")
-	}
-	return evidence.StatefulSet{
-		Reference: reference(object), Association: association,
-		Generation: wire.Metadata.Generation, ObservedGeneration: wire.Status.ObservedGeneration,
-		Desired: wire.Spec.Replicas, Ready: wire.Status.ReadyReplicas,
-		Deleting: object.GetDeletionTimestamp() != nil, MaintenanceAnnotation: maintenanceAnnotation(object),
-	}, nil
-}
-
-type containerProjection struct {
-	Name         string `json:"name"`
-	Ready        *bool  `json:"ready"`
-	RestartCount *int64 `json:"restartCount"`
-	State        struct {
-		Waiting *struct {
-			Reason  string `json:"reason"`
-			Message string `json:"message"`
-		} `json:"waiting"`
-		Terminated *struct {
-			Reason   string `json:"reason"`
-			ExitCode *int64 `json:"exitCode"`
-		} `json:"terminated"`
-	} `json:"state"`
-}
-
-func projectPod(object *unstructured.Unstructured, association evidence.Association) (evidence.Pod, error) {
-	var wire struct {
-		Status struct {
-			Phase      string `json:"phase"`
-			Conditions []struct {
-				Type    string `json:"type"`
-				Status  string `json:"status"`
-				Reason  string `json:"reason"`
-				Message string `json:"message"`
-			} `json:"conditions"`
-			Containers     []containerProjection `json:"containerStatuses"`
-			InitContainers []containerProjection `json:"initContainerStatuses"`
-		} `json:"status"`
-	}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.Object, &wire); err != nil {
-		return evidence.Pod{}, errors.New("invalid Pod projection")
-	}
-	result := evidence.Pod{
-		Reference:             reference(object),
-		Association:           association,
-		Phase:                 evidence.Clean(wire.Status.Phase),
-		Deleting:              object.GetDeletionTimestamp() != nil,
-		MaintenanceAnnotation: maintenanceAnnotation(object),
-		Containers:            []evidence.ContainerState{},
-	}
-	seen := false
-	for _, condition := range wire.Status.Conditions {
-		if condition.Type != "Ready" {
-			continue
+	associations := map[shared.Identity]shared.Association{}
+	for _, a := range source.Associations {
+		associations[a.Subject] = a
+		if a.State != shared.AssociationConfirmed && a.State != shared.AssociationForeign {
+			result.Omissions = append(
+				result.Omissions,
+				evidence.Omission{
+					Reference: evidence.Reference{
+						Kind:      a.Subject.Kind,
+						Namespace: a.Subject.Namespace,
+						Name:      a.Subject.Name,
+						UID:       a.Subject.UID,
+					},
+					Reason: string(a.State),
+				},
+			)
 		}
-		if seen {
-			return evidence.Pod{}, errors.New("duplicate Pod Ready condition")
-		}
-		seen = true
-		if condition.Status == "True" || condition.Status == "False" {
-			value := condition.Status == "True"
-			result.Ready = &value
-		} else if condition.Status != "Unknown" {
-			return evidence.Pod{}, errors.New("invalid Pod Ready condition")
-		}
-		result.ReadyReason, result.ReadyMessage = evidence.Clean(condition.Reason), evidence.Clean(condition.Message)
 	}
-	result.Containers = append(result.Containers, projectContainers(wire.Status.InitContainers, "init")...)
-	result.Containers = append(result.Containers, projectContainers(wire.Status.Containers, "app")...)
-	return result, nil
-}
-
-func projectContainers(containers []containerProjection, kind string) []evidence.ContainerState {
-	result := make([]evidence.ContainerState, 0, len(containers))
-	for _, container := range containers {
-		state := evidence.ContainerState{
-			Name:         evidence.Clean(container.Name),
-			Kind:         kind,
-			Ready:        container.Ready,
-			RestartCount: container.RestartCount,
+	if source.StatefulSets != nil {
+		for _, v := range source.StatefulSets.Observations {
+			a := associations[v.Metadata.Reference.Identity]
+			if a.State != shared.AssociationConfirmed {
+				continue
+			}
+			result.StatefulSets = append(result.StatefulSets, projectSet(v, a))
 		}
-		if waiting := container.State.Waiting; waiting != nil {
-			state.WaitingReason, state.WaitingMessage = evidence.Clean(waiting.Reason), evidence.Clean(waiting.Message)
+	}
+	if source.Pods != nil {
+		for _, v := range source.Pods.Observations {
+			a := associations[v.Metadata.Reference.Identity]
+			if a.State != shared.AssociationConfirmed {
+				continue
+			}
+			value := projectPod(v, a)
+			result.Pods = append(result.Pods, value)
 		}
-		if terminated := container.State.Terminated; terminated != nil {
-			state.TerminatedReason, state.ExitCode = evidence.Clean(terminated.Reason), terminated.ExitCode
+	}
+	if source.Restores != nil {
+		for _, v := range source.Restores.Observations {
+			a := associations[v.Reference.Identity]
+			if a.State != shared.AssociationConfirmed {
+				continue
+			}
+			result.Restores = append(result.Restores, projectRestore(v, a))
 		}
-		result = append(result, state)
 	}
 	return result
 }
 
-func projectRestore(object *unstructured.Unstructured, association evidence.Association) (evidence.Restore, error) {
-	var wire struct {
-		Metadata struct {
-			Generation *int64 `json:"generation"`
-		} `json:"metadata"`
-		Spec struct {
-			Cluster string `json:"cluster"`
-		} `json:"spec"`
-		Status struct {
-			Phase                    string `json:"phase"`
-			Message                  string `json:"message"`
-			CompletionTime           string `json:"completionTime"`
-			AdministratorDisposition string `json:"administratorDisposition"`
-			Target                   *struct {
-				UID string `json:"uid"`
-			} `json:"target"`
-			Execution *struct {
-				TargetUID   string `json:"targetUID"`
-				OperationID string `json:"operationID"`
-				Stage       string `json:"stage"`
-			} `json:"execution"`
-			Restart *struct {
-				CompletedAt string `json:"completedAt"`
-			} `json:"restart"`
-			Conditions []evidence.Condition `json:"conditions"`
-		} `json:"status"`
-	}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(object.Object, &wire); err != nil {
-		return evidence.Restore{}, errors.New("invalid restore projection")
-	}
-	result := evidence.Restore{
-		Reference:   reference(object),
-		Association: association,
-		Generation:  wire.Metadata.Generation,
-		Phase: evidence.Clean(
-			wire.Status.Phase,
+func projectSet(v shared.StatefulSet, a shared.Association) evidence.StatefulSet {
+	return evidence.StatefulSet{
+		Reference: reference(
+			v.Metadata.Reference,
 		),
-		Message:    evidence.Clean(wire.Status.Message),
-		TargetName: evidence.Clean(wire.Spec.Cluster),
-		CompletionTime: evidence.Clean(
-			wire.Status.CompletionTime,
+		Association:           evidence.Association{Basis: string(a.Basis), OwnerUID: a.Target.UID},
+		Generation:            v.Generation.Value,
+		ObservedGeneration:    v.ObservedGeneration.Value,
+		Desired:               v.DesiredReplicas.Value,
+		Ready:                 v.ReadyReplicas.Value,
+		Deleting:              v.Metadata.DeletionTimestamp.State == shared.ValueReported,
+		MaintenanceAnnotation: v.Metadata.Maintenance.Value,
+	}
+}
+
+func projectPod(v shared.Pod, a shared.Association) evidence.Pod {
+	value := evidence.Pod{
+		Reference: reference(
+			v.Metadata.Reference,
 		),
-		AdministratorDisposition: evidence.Clean(wire.Status.AdministratorDisposition),
-		Conditions:               wire.Status.Conditions,
+		Association:           evidence.Association{Basis: string(a.Basis), OwnerUID: a.Target.UID},
+		Phase:                 text(v.Phase),
+		Deleting:              v.Metadata.DeletionTimestamp.State == shared.ValueReported,
+		MaintenanceAnnotation: v.Metadata.Maintenance.Value,
+		Containers:            []evidence.ContainerState{},
 	}
-	if wire.Status.Target != nil {
-		result.TargetUID = evidence.Clean(wire.Status.Target.UID)
-	}
-	if wire.Status.Execution != nil {
-		result.ExecutionTargetUID = evidence.Clean(wire.Status.Execution.TargetUID)
-		result.OperationID, result.ExecutionStage = evidence.Clean(
-			wire.Status.Execution.OperationID,
-		), evidence.Clean(
-			wire.Status.Execution.Stage,
-		)
-	}
-	if wire.Status.Restart != nil {
-		result.RestartCompletedAt = evidence.Clean(wire.Status.Restart.CompletedAt)
-	}
-	if result.Conditions == nil {
-		result.Conditions = []evidence.Condition{}
-	}
-	seen := map[string]bool{}
-	for i := range result.Conditions {
-		condition := &result.Conditions[i]
-		if condition.Type == "" || seen[condition.Type] ||
-			(condition.Status != "True" && condition.Status != "False" && condition.Status != "Unknown") {
-			return evidence.Restore{}, errors.New("invalid restore conditions")
+	for _, c := range v.Conditions.Values {
+		if c.Type == "Ready" {
+			if c.Status != shared.ConditionUnknown {
+				ready := c.Status == shared.ConditionTrue
+				value.Ready = &ready
+			}
+			value.ReadyReason = text(c.Reason)
 		}
-		seen[condition.Type] = true
-		evidence.CleanStrings(&condition.Type, &condition.Reason, &condition.Message, &condition.LastTransitionTime)
-		condition.Field = "status.conditions[type=" + condition.Type + "]"
-		condition.GenerationCurrent = evidence.GenerationCurrent(result.Generation, condition.ObservedGeneration)
 	}
-	return result, nil
+	for _, list := range []shared.Containers{v.InitContainers, v.Containers} {
+		for _, c := range list.Values {
+			value.Containers = append(
+				value.Containers,
+				evidence.ContainerState{
+					Name:             c.Name,
+					Kind:             string(c.Kind),
+					Ready:            c.Ready.Value,
+					RestartCount:     c.RestartCount.Value,
+					WaitingReason:    text(c.WaitingReason),
+					TerminatedReason: text(c.TerminatedReason),
+					ExitCode:         c.ExitCode.Value,
+				},
+			)
+		}
+	}
+	return value
+}
+
+func projectRestore(v shared.Restore, a shared.Association) evidence.Restore {
+	return evidence.Restore{
+		Reference: reference(
+			v.Reference,
+		),
+		Association: evidence.Association{Basis: string(a.Basis), OwnerUID: a.Target.UID},
+		Generation:  v.Generation.Value,
+		Phase:       text(v.Phase),
+		TargetName:  text(v.TargetName),
+		TargetUID:   text(v.Target.UID),
+		ExecutionTargetUID: text(
+			v.Execution.TargetUID,
+		),
+		OperationID:              text(v.Execution.OperationID),
+		ExecutionStage:           text(v.Execution.Stage),
+		AdministratorDisposition: text(v.AdministratorDisposition),
+		CompletionTime:           timestamp(v.CompletedAt),
+		RestartCompletedAt:       timestamp(v.RestartCompletedAt),
+		Conditions:               conditions(v.Conditions, v.Generation, "status.conditions"),
+	}
 }

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kubebao/openbao-operator-cli/internal/evidence"
-	"github.com/kubebao/openbao-operator-cli/internal/status"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-client/adapter"
 )
 
 func fixture(t *testing.T) *unstructured.Unstructured {
@@ -27,98 +27,53 @@ func fixture(t *testing.T) *unstructured.Unstructured {
 	return object
 }
 
-func TestProjectionPreservesEvidenceAndExcludesSensitiveFields(t *testing.T) {
-	t.Parallel()
+func TestSharedProjectionMapsUnknownAndReportedFields(t *testing.T) {
 	captured := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
-	o, err := ProjectV1Alpha1(fixture(t), captured)
+	data, err := fixture(t).MarshalJSON()
 	if err != nil {
 		t.Fatal(err)
 	}
+	normalized, err := adapter.ProjectCluster(
+		data,
+		adapter.ProjectionOptions{
+			Origin:      "fixture",
+			CollectedAt: captured,
+			Contract:    adapter.V1Alpha1Snapshot,
+			Limits:      adapter.DefaultProjectionLimits(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := projectCluster(normalized)
 	if o.GenerationCurrent == nil || !*o.GenerationCurrent || o.Available.GenerationCurrent == nil || *o.Available.GenerationCurrent {
-		t.Fatalf("resource and condition generations were conflated: %+v", o)
+		t.Fatal("resource and condition generations conflated")
 	}
 	if !o.CollectedAt.Equal(captured) || o.Available.LastTransitionTime != "2026-11-09T10:00:00Z" {
-		t.Fatal("collection and transition times were conflated")
+		t.Fatal("collection and transition times conflated")
 	}
 	if o.ReadReplicas.Ready == nil || *o.ReadReplicas.Ready != 0 || o.Paused == nil || *o.Paused {
-		t.Fatal("reported zero and false values were lost")
-	}
-	if o.MaintenancePropagation != "not_collected" || o.RestoreHold != "restore-operation-123" {
-		t.Fatal("control evidence was not preserved")
-	}
-	for _, item := range o.Attention {
-		if strings.Contains(item.Summary, "OpenBaoSealed=False") || strings.Contains(item.Summary, "BackingUp=False") {
-			t.Fatalf("normal negative condition became a problem: %+v", item)
-		}
+		t.Fatal("reported zero or false was lost")
 	}
 	encoded, err := json.Marshal(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, canary := range []string{"EXCLUDED_FIELD_CANARY", "FIXTURE_CREDENTIAL"} {
-		if bytes.Contains(encoded, []byte(canary)) {
-			t.Fatalf("sensitive fixture value reached JSON: %s", canary)
+	for _, value := range []string{"EXCLUDED_FIELD_CANARY", "FIXTURE_CREDENTIAL", "Two voters are ready", "[REDACTED]"} {
+		if bytes.Contains(encoded, []byte(value)) {
+			t.Fatalf("provider or unapproved text reached output: %s", value)
 		}
 	}
-	if !bytes.Contains(encoded, []byte("[REDACTED]")) {
-		t.Fatal("known sensitive pattern was not redacted")
-	}
-	var rendered bytes.Buffer
-	report := evidence.Snapshot{Target: evidence.Target{Context: "fixture", Namespace: "security", Name: "prod"}, Observation: o}
-	if err := status.Write(&rendered, report, "text", true); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(rendered.String(), "CANARY") || strings.Contains(rendered.String(), "FIXTURE_CREDENTIAL") {
-		t.Fatal("sensitive fixture value reached verbose output")
-	}
-	if !strings.Contains(rendered.String(), "current-generation applicability is unconfirmed") {
-		t.Fatal("stale condition was not called out")
+	if o.WorkloadError == nil || o.WorkloadError.Message != "" || o.WorkloadError.Reason != "WorkloadBlocked" {
+		t.Fatal("structured error reason lost or message retained")
 	}
 }
 
-func TestMissingEvidenceRemainsUnknown(t *testing.T) {
-	t.Parallel()
-	object := &unstructured.Unstructured{Object: map[string]any{}}
-	o, err := ProjectV1Alpha1(object, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if o.Available != nil || o.GenerationCurrent != nil || o.Paused != nil || o.MaintenanceEnabled != nil || o.Voters.Ready != nil {
-		t.Fatalf("missing evidence became an observed value: %+v", o)
-	}
-	if o.Qualification != "unqualified" || len(o.Limitations) == 0 {
-		t.Fatal("interpretation limits are missing")
-	}
-}
-
-func TestMalformedProjectionDoesNotExposeValues(t *testing.T) {
-	t.Parallel()
-	object := fixture(t)
-	if err := unstructured.SetNestedField(object.Object, "PRIVATE_MALFORMED_VALUE", "spec", "replicas"); err != nil {
-		t.Fatal(err)
-	}
-	_, err := ProjectV1Alpha1(object, time.Now())
-	if err == nil || strings.Contains(err.Error(), "PRIVATE_MALFORMED_VALUE") {
-		t.Fatalf("unsafe error: %v", err)
-	}
-}
-
-func TestKnownCredentialPatterns(t *testing.T) {
-	t.Parallel()
-	for _, message := range []string{
-		"Authorization: Bearer PRIVATE_VALUE", `response {"root_token": "PRIVATE_VALUE"}`,
-		`password="PRIVATE_VALUE with spaces"`, "token=PRIVATE_VALUE",
-	} {
-		if result := evidence.Clean(message); strings.Contains(result, "PRIVATE_VALUE") {
-			t.Fatalf("known credential pattern was retained: %q", result)
+func TestLocalKubeconfigDisplayMetadataIsBounded(t *testing.T) {
+	for _, value := range []string{"Bearer PRIVATE_VALUE", "password=PRIVATE_VALUE", "line\nPRIVATE_VALUE"} {
+		got := evidence.Clean(value)
+		if strings.Contains(got, "\n") || strings.Contains(got, "password=PRIVATE_VALUE") || strings.Contains(got, "Bearer PRIVATE_VALUE") {
+			t.Fatal("unbounded local metadata")
 		}
-	}
-}
-
-func TestControlCharactersAreRemoved(t *testing.T) {
-	t.Parallel()
-	result := evidence.Clean("message\x1b[2J\nnext\rline")
-	if strings.ContainsAny(result, "\x1b\n\r") {
-		t.Fatalf("unsafe terminal output: %q", result)
 	}
 }

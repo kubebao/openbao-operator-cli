@@ -29,7 +29,7 @@
 | `make check-licenses` | Checks the generated dependency notices for drift |
 | `make dist` | Builds four local distribution archives and SHA-256 checksums |
 
-The module requires Go 1.27.3. With `GOTOOLCHAIN=auto`, the Go command selects a compatible toolchain. The Makefile pins
+The module requires Go 1.27.4. With `GOTOOLCHAIN=auto`, the Go command selects a compatible toolchain. The Makefile pins
 golangci-lint to `v2.14.0`, govulncheck to `v1.9.0`, and go-licenses to `v2.0.1`.
 
 Formatting uses gofumpt, goimports, and golines. The line limit is 140 characters. Cognitive complexity is limited to 30.
@@ -75,3 +75,16 @@ Until enabled, those jobs are skipped. A skipped job is not a successful securit
 The tooling and engineering conventions were adapted from `kubebao/openbao-operator-console` at commit
 `529bf8ef70099aedd8c7fef3a5c6df943e7f00a4`. The scaffold excludes the console's uncommitted edge-publication work, frontend,
 database, authentication, container, and Helm deployment tooling.
+
+
+## Shared client development
+
+Use Go 1.27.4 and the client version pinned in `go.mod`. Coordinated development can use an untracked `go.work` file.
+Final qualification uses `GOWORK=off` and no local replacement. The public client dependency requires no private-module
+credentials. Regenerate notices with `make licenses` after a dependency change.
+
+Run `make check`, `make vulncheck`, `make check-licenses`, and `make dist` for the migration. Verify archive checksums and
+contents. Synthetic command tests cover discovery/named-read boundaries, doctor selectors and limits, UID/generation
+verification, interruption, timeout, redirects, output failure, process codes, and sensitive-data exclusion. Pure mapping
+tests replay serialized normalized evidence with the same policy and reference time. Operator qualification must record
+its image/CRD identities and exercised capabilities separately.

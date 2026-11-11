@@ -42,50 +42,18 @@ users:
 	return path
 }
 
-func TestCollectionOutcomesAndGroupSelection(t *testing.T) {
+func TestCollectionUsesOnlyTheApprovedAPIGroup(t *testing.T) {
 	t.Parallel()
-	cases := []struct {
-		name, group, wantResult string
-		otherCode, wantCode     int
-	}{
-		{"absent alternate API", "", "completed", 404, 0},
-		{"denied alternate API", "", "incomplete", 403, 3},
-		{"failed alternate API", "", "incomplete", 500, 3},
-		{"ambiguous target", "", "ambiguous_api_group", 200, 1},
-		{"selected group", "openbao.org", "completed", 403, 0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			server := collectionServer(t, tc.otherCode, tc.group != "")
-			client, err := NewClient(
-				Options{Kubeconfig: kubeconfig(t, server.URL), Name: "prod", APIGroup: tc.group, RequestTimeout: time.Second},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-			report := client.Collect(context.Background())
-			if report.ExitCode != tc.wantCode || report.ResultCode != tc.wantResult {
-				t.Fatalf(
-					"result = %s/%d, want %s/%d; steps: %+v",
-					report.ResultCode,
-					report.ExitCode,
-					tc.wantResult,
-					tc.wantCode,
-					report.Collection,
-				)
-			}
-			if tc.wantCode != 1 && (report.Observation == nil || report.Target.UID != "fixture-cluster-uid") {
-				t.Fatal("usable target evidence was discarded")
-			}
-			encoded, err := json.Marshal(report)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if strings.Contains(string(encoded), "PROVIDER_SECRET_CANARY") {
-				t.Fatal("raw provider error reached output")
-			}
-		})
+	for _, group := range []string{"", "openbao.org"} {
+		server := collectionServer(t, 404, true)
+		client, err := NewClient(Options{Kubeconfig: kubeconfig(t, server.URL), Name: "prod", APIGroup: group, RequestTimeout: time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		report := client.Collect(context.Background())
+		if report.ResultCode != "completed" || report.Target.APIGroup != "openbao.org" || report.NormalizedEvidence == nil {
+			t.Fatalf("capture: %+v", report)
+		}
 	}
 }
 
@@ -98,6 +66,7 @@ func TestRefreshPinsUIDAndAvoidsRediscovery(t *testing.T) {
 		if r.URL.Path == "/apis/openbao.org/v1alpha1" {
 			discoveries.Add(1)
 			_ = json.NewEncoder(w).Encode(metav1.APIResourceList{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "APIResourceList"}, GroupVersion: "openbao.org/v1alpha1",
 				APIResources: []metav1.APIResource{{Name: "openbaoclusters", Kind: "OpenBaoCluster", Namespaced: true}},
 			})
 			return
@@ -115,16 +84,16 @@ func TestRefreshPinsUIDAndAvoidsRediscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report := client.Collect(context.Background()); report.ExitCode != 0 {
+	if report := client.Collect(context.Background()); report.ResultCode != "completed" {
 		t.Fatalf("initial collection: %+v", report)
 	}
 	report := client.Collect(context.Background())
-	if report.ExitCode != 3 || report.ResultCode != "resource_replaced" || report.Observation != nil ||
+	if report.ResultCode != "resource_replaced" || report.Observation != nil ||
 		report.Target.UID != "fixture-cluster-uid" || discoveries.Load() != 1 {
 		t.Fatalf("resource identity was not pinned: %+v", report)
 	}
-	if report.Collection[0].UID != "replacement-uid" {
-		t.Fatal("replacement identity was not recorded")
+	if report.Collection[0].Outcome != "replaced" || report.Collection[0].UID != "" {
+		t.Fatal("replacement was not distinguished from the selected identity")
 	}
 }
 
@@ -139,7 +108,7 @@ func TestCollectionTimeoutRemainsIncomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	report := client.Collect(context.Background())
-	if report.ExitCode != 3 || report.ResultCode != "incomplete" || report.Observation != nil {
+	if report.ResultCode != "incomplete" || report.Observation != nil {
 		t.Fatalf("timed-out collection became a complete observation: %+v", report)
 	}
 }
@@ -152,6 +121,7 @@ func TestRefreshReportsDeletion(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/apis/openbao.org/v1alpha1" {
 			_ = json.NewEncoder(w).Encode(metav1.APIResourceList{
+				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "APIResourceList"}, GroupVersion: "openbao.org/v1alpha1",
 				APIResources: []metav1.APIResource{{Name: "openbaoclusters", Kind: "OpenBaoCluster", Namespaced: true}},
 			})
 			return
@@ -169,11 +139,11 @@ func TestRefreshReportsDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report := client.Collect(context.Background()); report.ExitCode != 0 {
+	if report := client.Collect(context.Background()); report.ResultCode != "completed" {
 		t.Fatalf("initial collection: %+v", report)
 	}
 	report := client.Collect(context.Background())
-	if report.ExitCode != 3 || report.ResultCode != "resource_deleted" || report.Target.UID != "fixture-cluster-uid" {
+	if report.ResultCode != "resource_deleted" || report.Target.UID != "fixture-cluster-uid" {
 		t.Fatalf("deletion was not bound to the selected resource: %+v", report)
 	}
 }
@@ -200,6 +170,7 @@ func collectionServer(t *testing.T, otherCode int, explicit bool) *httptest.Serv
 		}
 		if r.URL.Path == "/apis/"+group+"/v1alpha1" {
 			_ = json.NewEncoder(w).Encode(metav1.APIResourceList{
+				TypeMeta:     metav1.TypeMeta{APIVersion: "v1", Kind: "APIResourceList"},
 				GroupVersion: group + "/v1alpha1",
 				APIResources: []metav1.APIResource{{Name: "openbaoclusters", Kind: "OpenBaoCluster", Namespaced: true}},
 			})

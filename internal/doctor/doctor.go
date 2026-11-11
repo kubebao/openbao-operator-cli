@@ -1,15 +1,19 @@
-// Package doctor interprets captured evidence without network access.
+// Package doctor maps shared analysis into CLI findings without network access.
 package doctor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"sort"
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-client/adapter"
+	"github.com/kubebao/openbao-operator-client/diagnose"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-const RuleSetVersion = "1"
+const RuleSetVersion = diagnose.RuleSetVersion
 
 type Severity string
 
@@ -17,16 +21,10 @@ const (
 	Info    Severity = "info"
 	Warning Severity = "warning"
 	Error   Severity = "error"
-	None    Severity = "none"
-)
-
-const (
-	evaluated     = "evaluated"
-	insufficient  = "insufficient_evidence"
-	notApplicable = "not_applicable"
 )
 
 type Finding struct {
+	ID              string               `json:"id"`
 	RuleID          string               `json:"ruleID"`
 	Severity        Severity             `json:"severity"`
 	Summary         string               `json:"summary"`
@@ -35,136 +33,178 @@ type Finding struct {
 	SuggestedChecks []string             `json:"suggestedChecks"`
 	MissingEvidence []string             `json:"missingEvidence"`
 }
-
 type RuleCoverage struct {
 	RuleID          string   `json:"ruleID"`
 	State           string   `json:"state"`
 	MissingEvidence []string `json:"missingEvidence"`
 }
-
 type Report struct {
-	SchemaVersion    string            `json:"schemaVersion"`
-	RuleSetVersion   string            `json:"ruleSetVersion"`
-	AnalysisTime     time.Time         `json:"analysisTime"`
-	FailureThreshold Severity          `json:"failureThreshold"`
-	ResultCode       string            `json:"resultCode"`
-	ExitCode         int               `json:"exitCode"`
-	Findings         []Finding         `json:"findings"`
-	Coverage         []RuleCoverage    `json:"coverage"`
-	Evidence         evidence.Snapshot `json:"evidence"`
+	SchemaVersion  string            `json:"schemaVersion"`
+	RuleSetVersion string            `json:"ruleSetVersion"`
+	AnalysisTime   time.Time         `json:"analysisTime"`
+	Policy         diagnose.Policy   `json:"policy"`
+	Findings       []Finding         `json:"findings"`
+	Coverage       []RuleCoverage    `json:"coverage"`
+	Evidence       evidence.Snapshot `json:"evidence"`
+	Complete       bool              `json:"-"`
 }
 
-func ParseSeverity(value string) (Severity, error) {
-	switch Severity(value) {
-	case Info, Warning, Error, None:
-		return Severity(value), nil
-	default:
-		return "", errors.New("failure threshold must be info, warning, error, or none")
+func Policy(at time.Time) diagnose.Policy {
+	p := diagnose.DefaultPolicy(
+		at,
+		[]string{string(adapter.V1Alpha1Snapshot), string(adapter.KubernetesAppsV1), string(adapter.KubernetesCoreV1)},
+	)
+	p.Rules = []diagnose.RuleID{
+		diagnose.RuleAvailability,
+		diagnose.RuleWorkload,
+		diagnose.RulePod,
+		diagnose.RuleRestriction,
+		diagnose.RuleRestore,
 	}
+	p.RestoreUIDBindingContracts = []string{string(adapter.V1Alpha1Snapshot)}
+	p.ReportHistoricalRestores = false
+	p.MaxSubjects = 3001
+	return p
 }
 
-type evaluation struct {
-	coverage RuleCoverage
-	findings []Finding
+func StatusPolicy(at time.Time) diagnose.Policy {
+	p := Policy(at)
+	p.Rules = []diagnose.RuleID{
+		diagnose.RuleGeneration,
+		diagnose.RuleAvailability,
+		diagnose.RuleSealed,
+		diagnose.RuleCondition,
+		diagnose.RuleController,
+		diagnose.RuleRestriction,
+		diagnose.RuleBackupFailed,
+		diagnose.RuleUpgrade,
+	}
+	return p
 }
 
-// Analyze uses the capture's reference time, so equivalent live and stored evidence agree.
-func Analyze(snapshot evidence.Snapshot, threshold Severity) Report {
+func Analyze(snapshot evidence.Snapshot, policy diagnose.Policy) (Report, error) {
 	report := Report{
-		SchemaVersion: "v1", RuleSetVersion: RuleSetVersion, AnalysisTime: snapshot.CompletedAt,
-		FailureThreshold: threshold, ResultCode: snapshot.ResultCode, ExitCode: snapshot.ExitCode,
-		Findings: []Finding{}, Coverage: []RuleCoverage{}, Evidence: snapshot,
+		SchemaVersion:  "v1",
+		RuleSetVersion: RuleSetVersion,
+		AnalysisTime:   policy.ReferenceTime,
+		Policy:         policy,
+		Findings:       []Finding{},
+		Coverage:       []RuleCoverage{},
+		Evidence:       snapshot,
+		Complete:       false,
 	}
-	if _, err := ParseSeverity(string(threshold)); err != nil {
-		report.ResultCode, report.ExitCode = "invalid_input", 1
-		return report
-	}
-	if snapshot.Observation == nil {
-		if report.ExitCode == 0 {
-			report.ResultCode, report.ExitCode = "incomplete", 3
+	if snapshot.NormalizedEvidence == nil {
+		if snapshot.ResultCode != "completed" {
+			return report, nil
 		}
-		return report
+		return report, errors.New("normalized evidence is missing")
 	}
-	rules := []func(evidence.Snapshot) evaluation{
-		clusterAvailability, workloadReadiness, podReadiness, restrictions, restoreRecovery,
+	result, err := diagnose.Analyze(*snapshot.NormalizedEvidence, policy)
+	if err != nil {
+		return report, errors.New("normalized evidence cannot be evaluated")
 	}
-	for _, rule := range rules {
-		result := rule(snapshot)
-		for i := range result.findings {
-			result.findings[i].MissingEvidence = append(result.findings[i].MissingEvidence, result.coverage.MissingEvidence...)
+	report.Complete = true
+	missing := map[diagnose.RuleID][]string{}
+	for _, c := range result.Coverage {
+		state := string(c.State)
+		limits := []string{}
+		if c.State == diagnose.Insufficient {
+			report.Complete = false
+			state = "insufficient_evidence"
+			limits = append(limits, string(c.Reason))
+			missing[c.Rule] = limits
 		}
-		report.Coverage = append(report.Coverage, result.coverage)
-		report.Findings = append(report.Findings, result.findings...)
-		if result.coverage.State == insufficient {
-			report.ExitCode, report.ResultCode = 3, "incomplete"
+		if c.State == diagnose.NotRequested {
+			report.Complete = false
 		}
+		report.Coverage = append(report.Coverage, RuleCoverage{RuleID: string(c.Rule), State: state, MissingEvidence: limits})
 	}
-	sort.SliceStable(report.Findings, func(i, j int) bool {
-		left, right := report.Findings[i], report.Findings[j]
-		if left.Severity != right.Severity {
-			return severityRank(left.Severity) > severityRank(right.Severity)
+	for _, f := range result.Findings {
+		key, keyErr := f.Key()
+		if keyErr != nil {
+			return report, errors.New("invalid finding identity")
 		}
-		return left.RuleID < right.RuleID
-	})
-	if report.ExitCode != 0 {
-		return report
-	}
-	for _, finding := range report.Findings {
-		if threshold != None && severityRank(finding.Severity) >= severityRank(threshold) {
-			report.ExitCode, report.ResultCode = 2, "findings"
-			break
+		sum := sha256.Sum256([]byte(key))
+		severity := Warning
+		switch f.Severity {
+		case diagnose.Info:
+			severity = Info
+		case diagnose.Error, diagnose.Critical:
+			severity = Error
 		}
+		value := Finding{
+			ID: string(
+				f.Rule,
+			) + ":" + hex.EncodeToString(
+				sum[:16],
+			),
+			RuleID:          string(f.Rule),
+			Severity:        severity,
+			Summary:         f.Subject.Kind + " " + f.Subject.Namespace + "/" + f.Subject.Name,
+			Description:     f.Summary,
+			Evidence:        []evidence.Reference{},
+			SuggestedChecks: []string{suggestedCheck(f.Rule)},
+			MissingEvidence: append([]string{}, missing[f.Rule]...),
+		}
+		for _, ref := range f.References {
+			value.Evidence = append(value.Evidence, evidence.Reference{
+				APIVersion:      ref.APIVersion,
+				Kind:            ref.Identity.Kind,
+				Namespace:       ref.Identity.Namespace,
+				Name:            ref.Identity.Name,
+				UID:             ref.Identity.UID,
+				ResourceVersion: stringValue(ref.ResourceVersion),
+				CollectedAt:     *ref.CollectedAt.Value,
+				Field:           ref.Field,
+			})
+		}
+		report.Findings = append(report.Findings, value)
 	}
-	return report
+	return report, nil
 }
 
-func severityRank(severity Severity) int {
-	switch severity {
-	case Info:
-		return 1
-	case Warning:
-		return 2
-	case Error:
-		return 3
+func stringValue(value shared.Text) string {
+	if value.Value == nil {
+		return ""
+	}
+	return *value.Value
+}
+
+func suggestedCheck(rule diagnose.RuleID) string {
+	switch rule {
+	case diagnose.RuleAvailability:
+		return "Inspect current resource and Available condition acknowledgement."
+	case diagnose.RuleWorkload, diagnose.RulePod:
+		return "Inspect the UID-confirmed workload and its reported readiness."
+	case diagnose.RuleRestore:
+		return "Inspect the UID-confirmed restore and any matching hold; do not replay an ambiguous submission."
+	case diagnose.RuleRestriction:
+		return "Inspect independent pause, maintenance, restore-hold, and break-glass controls."
 	default:
-		return 4
+		return "Inspect the referenced public operator fields."
 	}
 }
 
-func startRule(id string) evaluation {
-	return evaluation{coverage: RuleCoverage{RuleID: id, State: evaluated, MissingEvidence: []string{}}, findings: []Finding{}}
-}
-
-func (e *evaluation) missing(message string) {
-	e.coverage.State = insufficient
-	e.coverage.MissingEvidence = append(e.coverage.MissingEvidence, message)
-}
-
-func (e *evaluation) add(severity Severity, summary, description, check string, refs ...evidence.Reference) {
-	e.findings = append(e.findings, Finding{
-		RuleID: e.coverage.RuleID, Severity: severity, Summary: summary, Description: description,
-		Evidence: refs, SuggestedChecks: []string{check}, MissingEvidence: []string{},
-	})
-}
-
-func clusterReference(snapshot evidence.Snapshot, field string) evidence.Reference {
-	ref := evidence.Reference{
-		APIVersion: snapshot.Target.APIVersion, Kind: "OpenBaoCluster", Namespace: snapshot.Target.Namespace,
-		Name: snapshot.Target.Name, UID: snapshot.Target.UID, Field: field,
+func StatusAttention(snapshot evidence.Snapshot) ([]evidence.Attention, error) {
+	report, err := Analyze(snapshot, StatusPolicy(snapshot.CompletedAt))
+	if err != nil {
+		return nil, err
 	}
-	if snapshot.Observation != nil {
-		ref.ResourceVersion, ref.CollectedAt = snapshot.Observation.ResourceVersion, snapshot.Observation.CollectedAt
+	result := []evidence.Attention{}
+	for _, f := range report.Findings {
+		field := ""
+		if len(f.Evidence) > 0 {
+			field = f.Evidence[0].Field
+		}
+		result = append(result, evidence.Attention{Code: f.RuleID, Summary: f.Description, Field: field})
 	}
-	return ref
-}
-
-func field(ref evidence.Reference, name string) evidence.Reference { ref.Field = name; return ref }
-
-func scopeOutcome(snapshot evidence.Snapshot, resource string) string {
-	for _, step := range snapshot.Collection {
-		if step.Action == "list" && step.Resource == resource {
-			return step.Outcome
+	for _, c := range report.Coverage {
+		if c.State == "insufficient_evidence" {
+			result = append(
+				result,
+				evidence.Attention{Code: c.RuleID + "_incomplete", Summary: c.RuleID + ": current evidence is insufficient for evaluation"},
+			)
 		}
 	}
-	return "not_collected"
+	return result, nil
 }

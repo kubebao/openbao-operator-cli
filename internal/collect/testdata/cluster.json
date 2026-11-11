@@ -33,7 +33,7 @@
       {"type": "Available", "status": "False", "reason": "InsufficientReadyReplicas", "message": "Two voters are ready", "observedGeneration": 6, "lastTransitionTime": "2026-11-09T10:00:00Z"},
       {"type": "BackingUp", "status": "False", "reason": "Idle", "observedGeneration": 7}
     ],
-    "backup": {"lastBackupTime": "2026-11-09T11:00:00Z", "consecutiveFailures": 1, "lastFailureReason": "AuthenticationFailed", "lastFailureMessage": "authentication failed password=FIXTURE_CREDENTIAL", "lastBackupName": "EXCLUDED_FIELD_CANARY"},
+    "backup": {"lastBackupTime": "2026-11-09T11:00:00Z", "consecutiveFailures": 1, "lastFailureReason": "AuthenticationFailed", "lastFailureMessage": "authentication failed password=FIXTURE_CREDENTIAL", "lastBackupName": "backups/prod.snapshot"},
     "upgrade": {"fromVersion": "2.6.3", "targetVersion": "2.6.4", "currentPartition": 1, "completedPods": [2], "failure": {"reason": "UpgradeFailed", "message": "token=FIXTURE_CREDENTIAL"}},
     "blueGreen": {"phase": "Idle", "greenVersion": "2.6.4"},
     "operationLock": {"operation": "Upgrade", "holder": "fixture-controller", "renewedAt": "2026-11-09T11:10:00Z"},

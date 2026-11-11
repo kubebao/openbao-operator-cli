@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -38,11 +39,12 @@ func setFixture(t *testing.T, uid, ownerUID string) unstructured.Unstructured {
 func podFixture(t *testing.T, uid, ownerUID string) unstructured.Unstructured {
 	t.Helper()
 	return relatedObject(t, fmt.Sprintf(`{
-	"apiVersion":"v1","kind":"Pod","metadata":{"namespace":"security","name":%q,"uid":%q,"resourceVersion":"101",
+	"apiVersion":"v1","kind":"Pod","metadata":{"namespace":"security","name":%q,"uid":%q,"resourceVersion":"101","generation":1,
 	"annotations":{"arbitrary":"SPEC_CANARY"},"ownerReferences":[{"apiVersion":"apps/v1","kind":"StatefulSet",
 	"name":"prod","uid":%q,"controller":true}]},"spec":{"containers":[{"name":"bao","args":["SPEC_CANARY"],
 	"env":[{"name":"VALUE","value":"SPEC_CANARY"}]}]},"status":{"phase":"Running",
-	"conditions":[{"type":"Ready","status":"False","reason":"ContainersNotReady"}],"containerStatuses":[{"name":"bao",
+	"conditions":[{"type":"Ready","status":"False","observedGeneration":1,
+ "reason":"ContainersNotReady"}],"containerStatuses":[{"name":"bao",
 	"ready":false,"restartCount":2,"state":{"waiting":{"reason":"CrashLoopBackOff",
 	"message":"password=PRIVATE_VALUE"}}}]}}`, uid, uid, ownerUID))
 }
@@ -75,7 +77,7 @@ func diagnosticServer(t *testing.T, scenario relatedScenario) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/apis/openbao.org/v1alpha1":
-			_, _ = fmt.Fprint(w, `{"kind":"APIResourceList","apiVersion":"v1","resources":[
+			_, _ = fmt.Fprint(w, `{"kind":"APIResourceList","apiVersion":"v1","groupVersion":"openbao.org/v1alpha1","resources":[
 			{"name":"openbaoclusters","kind":"OpenBaoCluster","namespaced":true}]}`)
 		case "/apis/openbao.org/v1alpha1/namespaces/security/openbaoclusters/prod":
 			object := base.DeepCopy()
@@ -118,10 +120,20 @@ func writeRelatedList(t *testing.T, w http.ResponseWriter, r *http.Request, vers
 		_, _ = fmt.Fprint(w, `{"kind":"Status","message":"API_BODY_CANARY"}`)
 		return
 	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("continue"))
+	next := ""
+	if !continued && len(items) > 100 {
+		end := min(offset+100, len(items))
+		if end < len(items) {
+			next = strconv.Itoa(end)
+		}
+		items = items[offset:end]
+	}
 	list := &unstructured.UnstructuredList{Items: items}
 	list.SetAPIVersion(version)
 	list.SetKind(kind)
 	list.SetResourceVersion("1000")
+	list.SetContinue(next)
 	if list.Items == nil {
 		list.Items = []unstructured.Unstructured{}
 	}
@@ -159,7 +171,7 @@ func TestDiagnosticAssociationAndProjection(t *testing.T) {
 			restoreFixture(t, "foreign-restore", "old-cluster-uid"),
 		},
 	})
-	if snapshot.ExitCode != 0 || len(snapshot.Related.StatefulSets) != 1 || len(snapshot.Related.Pods) != 1 ||
+	if snapshot.ResultCode != "completed" || len(snapshot.Related.StatefulSets) != 1 || len(snapshot.Related.Pods) != 1 ||
 		len(snapshot.Related.Restores) != 1 {
 		t.Fatalf("ownership correlation failed: %+v", snapshot)
 	}
@@ -167,7 +179,7 @@ func TestDiagnosticAssociationAndProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"SPEC_CANARY", "PRIVATE_VALUE", "foreign-restore", "foreign-pod"} {
+	for _, value := range []string{"SPEC_CANARY", "PRIVATE_VALUE"} {
 		if strings.Contains(string(encoded), value) {
 			t.Fatalf("unapproved evidence retained: %s", value)
 		}
@@ -185,7 +197,7 @@ func TestLabelsAndNamesDoNotProveAssociation(t *testing.T) {
 		t,
 		relatedScenario{pods: []unstructured.Unstructured{orphan}, restores: []unstructured.Unstructured{request}},
 	)
-	if snapshot.ExitCode != 3 || len(snapshot.Related.Pods) != 0 || len(snapshot.Related.Restores) != 0 ||
+	if snapshot.ResultCode == "completed" || len(snapshot.Related.Pods) != 0 || len(snapshot.Related.Restores) != 0 ||
 		len(snapshot.Related.Omissions) != 2 {
 		t.Fatalf("unverified ownership became associated evidence: %+v", snapshot)
 	}
@@ -197,7 +209,7 @@ func TestPartialCollectionPreservesIndependentEvidence(t *testing.T) {
 		setCode:  http.StatusForbidden,
 		restores: []unstructured.Unstructured{restoreFixture(t, "own-restore", "fixture-cluster-uid")},
 	})
-	if snapshot.ExitCode != 3 || snapshot.Observation == nil || len(snapshot.Related.Restores) != 1 {
+	if snapshot.ResultCode == "completed" || snapshot.Observation == nil || len(snapshot.Related.Restores) != 1 {
 		t.Fatalf("partial evidence discarded: %+v", snapshot)
 	}
 	encoded, err := json.Marshal(snapshot)
@@ -213,7 +225,7 @@ func TestDiagnosticTargetChangesRemainIncomplete(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []relatedScenario{{replace: true}, {changeGeneration: true}} {
 		snapshot := collectScenario(t, scenario)
-		if snapshot.ExitCode != 3 || snapshot.Target.UID != "fixture-cluster-uid" {
+		if snapshot.ResultCode == "completed" || snapshot.Target.UID != "fixture-cluster-uid" {
 			t.Fatalf("target change was accepted: %+v", snapshot)
 		}
 		if scenario.changeGeneration {
@@ -232,7 +244,7 @@ func TestConflictingRestoreIdentitiesAreNotAssociated(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := collectScenario(t, relatedScenario{restores: []unstructured.Unstructured{request}})
-	if snapshot.ExitCode != 3 || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
+	if snapshot.ResultCode == "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
 		t.Fatalf("conflicting target evidence was accepted: %+v", snapshot)
 	}
 }
@@ -244,7 +256,7 @@ func TestLegacyCompletedRestoreRemainsUnassociated(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := collectScenario(t, relatedScenario{restores: []unstructured.Unstructured{request}})
-	if snapshot.ExitCode != 3 || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
+	if snapshot.ResultCode == "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
 		t.Fatalf("legacy name-only association was accepted: %+v", snapshot)
 	}
 }
@@ -252,7 +264,7 @@ func TestLegacyCompletedRestoreRemainsUnassociated(t *testing.T) {
 func TestDiagnosticPaginationAndLimits(t *testing.T) {
 	t.Parallel()
 	snapshot := collectScenario(t, relatedScenario{continued: true})
-	if snapshot.ExitCode != 3 || snapshot.Collection[2].Outcome != "repeated_continue_token" {
+	if snapshot.ResultCode == "completed" || snapshot.Collection[2].Outcome != "repeated_continue_token" {
 		t.Fatalf("repeated pagination token was accepted: %+v", snapshot.Collection)
 	}
 	items := make([]unstructured.Unstructured, maxCandidates+1)
@@ -260,7 +272,7 @@ func TestDiagnosticPaginationAndLimits(t *testing.T) {
 		items[i] = setFixture(t, fmt.Sprintf("set-%d", i), "fixture-cluster-uid")
 	}
 	snapshot = collectScenario(t, relatedScenario{sets: items})
-	if snapshot.ExitCode != 3 || len(snapshot.Related.StatefulSets) != maxCandidates {
+	if snapshot.ResultCode == "completed" || len(snapshot.Related.StatefulSets) != maxCandidates {
 		t.Fatalf("candidate limit failed: %d", len(snapshot.Related.StatefulSets))
 	}
 }

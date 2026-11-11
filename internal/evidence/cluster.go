@@ -1,19 +1,24 @@
-// Package evidence defines sanitized observations shared by commands and diagnostic rules.
+// Package evidence defines CLI display models and a normalized shared capture.
+// Command envelopes own process results; shared analysis consumes only the capture.
 package evidence
 
-import "time"
+import (
+	"time"
+
+	"github.com/kubebao/openbao-operator-client/diagnose"
+)
 
 // Snapshot describes a bounded collection attempt, not an atomic cluster snapshot.
 type Snapshot struct {
-	SchemaVersion string       `json:"schemaVersion"`
-	ResultCode    string       `json:"resultCode"`
-	ExitCode      int          `json:"exitCode"`
-	StartedAt     time.Time    `json:"startedAt"`
-	CompletedAt   time.Time    `json:"completedAt"`
-	Target        Target       `json:"target"`
-	Observation   *Observation `json:"observation"`
-	Collection    []Step       `json:"collection"`
-	Related       *Related     `json:"related,omitempty"`
+	NormalizedEvidence *diagnose.Capture `json:"normalizedEvidence,omitempty"`
+	SchemaVersion      string            `json:"schemaVersion"`
+	ResultCode         string            `json:"resultCode"`
+	StartedAt          time.Time         `json:"startedAt"`
+	CompletedAt        time.Time         `json:"completedAt"`
+	Target             Target            `json:"target"`
+	Observation        *Observation      `json:"observation"`
+	Collection         []Step            `json:"collection"`
+	Related            *Related          `json:"related,omitempty"`
 }
 
 type Target struct {
@@ -146,7 +151,7 @@ type LegacyRestore struct {
 	RestartCompletedAt string `json:"restartCompletedAt"`
 }
 
-// Attention identifies source fields worth inspecting, without running doctor rules.
+// Attention maps selected shared rule findings and incomplete coverage for status.
 type Attention struct {
 	Code    string `json:"code"`
 	Summary string `json:"summary"`

@@ -8,7 +8,6 @@ import (
 
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
 	"github.com/kubebao/openbao-operator-cli/internal/collect"
-	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 )
 
 func newDoctorCommand(info buildinfo.Info) *cobra.Command {
@@ -26,8 +25,7 @@ func newDoctorCommand(info buildinfo.Info) *cobra.Command {
 			if output != "text" && output != "json" {
 				return fmt.Errorf("unsupported output format %q: use text or json", output)
 			}
-			threshold, err := doctor.ParseSeverity(failOn)
-			if err != nil {
+			if err := parseFailureThreshold(failOn); err != nil {
 				return err
 			}
 			options.Name = args[0]
@@ -35,8 +33,8 @@ func newDoctorCommand(info buildinfo.Info) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			report := doctor.Analyze(client.CollectDiagnostic(command.Context()), threshold)
-			if err := doctor.Write(command.OutOrStdout(), report, output, verbose); err != nil {
+			report := diagnosticResult(client.CollectDiagnostic(command.Context()), failOn)
+			if err := writeDiagnostic(command.OutOrStdout(), report, output, verbose); err != nil {
 				return err
 			}
 			if report.ExitCode != 0 {

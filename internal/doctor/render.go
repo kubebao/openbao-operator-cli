@@ -1,19 +1,12 @@
 package doctor
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 )
 
-func Write(writer io.Writer, report Report, output string, verbose bool) error {
-	if output == "json" {
-		if err := json.NewEncoder(writer).Encode(report); err != nil {
-			return fmt.Errorf("write diagnosis JSON: %w", err)
-		}
-		return nil
-	}
+func WriteText(writer io.Writer, report Report, resultCode string, verbose bool) error {
 	var buffer strings.Builder
 	target := report.Evidence.Target
 	fmt.Fprintf(
@@ -22,7 +15,7 @@ func Write(writer io.Writer, report Report, output string, verbose bool) error {
 		target.Context,
 		target.Namespace,
 		target.Name,
-		report.ResultCode,
+		resultCode,
 		report.RuleSetVersion,
 	)
 	for _, finding := range report.Findings {

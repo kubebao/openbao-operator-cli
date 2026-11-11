@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -22,7 +24,7 @@ func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
 		}
 		switch r.URL.Path {
 		case "/apis/openbao.org/v1alpha1":
-			_, _ = fmt.Fprint(w, `{"kind":"APIResourceList","resources":[
+			_, _ = fmt.Fprint(w, `{"apiVersion":"v1","kind":"APIResourceList","groupVersion":"openbao.org/v1alpha1","resources":[
 			{"name":"openbaoclusters","kind":"OpenBaoCluster","namespaced":true}]}`)
 		case "/apis/openbao.org/v1alpha1/namespaces/context-namespace/openbaoclusters/prod":
 			_, _ = fmt.Fprint(w, `{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoCluster",
@@ -30,7 +32,7 @@ func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
 			"spec":{"replicas":1},"status":{"observedGeneration":1,"conditions":[
 			{"type":"Available","status":"True","observedGeneration":1}]}}`)
 		case "/apis/apps/v1/namespaces/context-namespace/statefulsets":
-			_, _ = fmt.Fprint(w, `{"apiVersion":"apps/v1","kind":"StatefulSetList","items":[
+			_, _ = fmt.Fprint(w, `{"apiVersion":"apps/v1","kind":"StatefulSetList","metadata":{"resourceVersion":"100"},"items":[
 			{"metadata":{"name":"prod","namespace":"context-namespace","uid":"set","generation":1,
 			"ownerReferences":[{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoCluster",
 			"name":"prod","uid":"cluster","controller":true}]},
@@ -45,13 +47,16 @@ func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
 			if ready {
 				condition = "True"
 			}
-			_, _ = fmt.Fprintf(w, `{"apiVersion":"v1","kind":"PodList","items":[
-			{"metadata":{"name":"prod-0","namespace":"context-namespace","uid":"pod",
+			_, _ = fmt.Fprintf(w, `{"apiVersion":"v1","kind":"PodList","metadata":{"resourceVersion":"100"},"items":[
+			{"metadata":{"name":"prod-0","namespace":"context-namespace","uid":"pod","generation":1,
 			"ownerReferences":[{"apiVersion":"apps/v1","kind":"StatefulSet","name":"prod","uid":"set","controller":true}]},
 			"spec":{"containers":[{"args":["SPEC_PRIVATE_CANARY"]}]},"status":{"phase":"Running","conditions":[
-			{"type":"Ready","status":%q,"reason":"FixtureReadiness"}]}}]}`, condition)
+			{"type":"Ready","observedGeneration":1,"status":%q,"reason":"FixtureReadiness"}]}}]}`, condition)
 		case "/apis/openbao.org/v1alpha1/namespaces/context-namespace/openbaorestores":
-			_, _ = fmt.Fprint(w, `{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoRestoreList","items":[]}`)
+			_, _ = fmt.Fprint(
+				w,
+				`{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoRestoreList","metadata":{"resourceVersion":"100"},"items":[]}`,
+			)
 		default:
 			t.Errorf("unexpected read: %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -71,6 +76,8 @@ func TestDoctorCommandResults(t *testing.T) {
 	}{
 		{"captured readiness", true, false, "warning", 0},
 		{"readiness finding", false, false, "warning", 2},
+		{"lower threshold", false, false, "info", 2},
+		{"disabled threshold", false, false, "none", 0},
 		{"higher threshold", false, false, "error", 0},
 		{"incomplete evidence", true, true, "none", 3},
 	}
@@ -83,7 +90,7 @@ func TestDoctorCommandResults(t *testing.T) {
 				"doctor", "prod", "--kubeconfig", statusConfig(t, server.URL),
 				"--api-group", "openbao.org", "--fail-on", tc.threshold, "-o", "json",
 			}, &stdout, &stderr)
-			var report doctor.Report
+			var report diagnosticReport
 			if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 				t.Fatalf("invalid JSON: %v; stderr %s", err, &stderr)
 			}
@@ -126,5 +133,41 @@ func TestDoctorRejectsThresholdBeforeLoadingCredentials(t *testing.T) {
 	)
 	if code != 1 || stdout.Len() != 0 || strings.Contains(stderr.String(), "cannot load kubeconfig") {
 		t.Fatalf("invalid threshold reached collection: %d %s", code, &stderr)
+	}
+}
+
+func TestDoctorIncompleteEvaluationPrecedesConfirmedFindings(t *testing.T) {
+	t.Parallel()
+	server := doctorServer(t, false, false)
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forward := httputil.NewSingleHostReverseProxy(target)
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "openbaorestores") {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		forward.ServeHTTP(w, r)
+	}))
+	defer proxy.Close()
+	var stdout, stderr bytes.Buffer
+	code := Execute(
+		context.Background(),
+		[]string{"doctor", "prod", "--kubeconfig", statusConfig(t, proxy.URL), "--fail-on", "none", "-o", "json"},
+		&stdout,
+		&stderr,
+	)
+	var report diagnosticReport
+	if json.Unmarshal(stdout.Bytes(), &report) != nil {
+		t.Fatal("diagnostic JSON missing")
+	}
+	if code != 3 || report.ExitCode != 3 || len(report.Findings) != 1 || report.Findings[0].RuleID != "KBAO-POD-001" {
+		t.Fatalf("incomplete diagnosis lost confirmed finding: %d %+v", code, report)
+	}
+	data, err := json.Marshal(report.Evidence.NormalizedEvidence)
+	if err != nil || strings.Contains(string(data), `"exitCode":3`) {
+		t.Fatal("process code entered canonical evidence")
 	}
 }

@@ -1,215 +1,240 @@
 package doctor
 
 import (
-	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-client/adapter"
+	"github.com/kubebao/openbao-operator-client/diagnose"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-func ptr[T any](value T) *T { return &value }
-
-func healthySnapshot() evidence.Snapshot {
-	captured := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
-	ref := evidence.Reference{
-		APIVersion:      "apps/v1",
-		Kind:            "StatefulSet",
-		Namespace:       "security",
-		Name:            "prod",
-		UID:             "set",
-		ResourceVersion: "20",
-		CollectedAt:     captured,
+func captureFixture(t *testing.T) evidence.Snapshot {
+	t.Helper()
+	at := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	options := adapter.ProjectionOptions{
+		Origin:      "fixture",
+		CollectedAt: at,
+		Contract:    adapter.V1Alpha1Snapshot,
+		Limits:      adapter.DefaultProjectionLimits(),
 	}
-	podRef := evidence.Reference{
-		APIVersion:      "v1",
-		Kind:            "Pod",
-		Namespace:       "security",
-		Name:            "prod-0",
-		UID:             "pod",
-		ResourceVersion: "21",
-		CollectedAt:     captured,
+	cluster, err := adapter.ProjectCluster(
+		[]byte(
+			`{
+  "apiVersion": "openbao.org/v1alpha1",
+  "kind": "OpenBaoCluster",
+  "metadata": {
+    "namespace": "security",
+    "name": "prod",
+    "uid": "cluster",
+    "generation": 1
+  },
+  "spec": {
+    "replicas": 1
+  },
+  "status": {
+    "observedGeneration": 1,
+    "conditions": [
+      {
+        "type": "Available",
+        "status": "True",
+        "observedGeneration": 1
+      }
+    ]
+  }
+}`,
+		),
+		options,
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return evidence.Snapshot{
-		SchemaVersion: "v1",
-		ResultCode:    "completed",
-		StartedAt:     captured,
-		CompletedAt:   captured.Add(time.Second),
-		Target: evidence.Target{
-			Context:    "fixture",
-			Namespace:  "security",
-			Name:       "prod",
-			UID:        "cluster",
-			APIGroup:   "openbao.org",
-			APIVersion: "openbao.org/v1alpha1",
-		},
-		Observation: &evidence.Observation{
-			CollectedAt:        captured,
-			ResourceVersion:    "10",
-			Generation:         ptr(int64(1)),
-			ObservedGeneration: ptr(int64(1)),
-			GenerationCurrent:  ptr(true),
-			Voters:             evidence.Replicas{Desired: ptr(int64(1)), Ready: ptr(int64(1))},
-			Available: &evidence.Condition{
-				Type:               "Available",
-				Status:             "True",
-				ObservedGeneration: ptr(int64(1)),
-				GenerationCurrent:  ptr(true),
-				Field:              "status.conditions[type=Available]",
-			},
-		},
-		Collection: []evidence.Step{
-			{Resource: "statefulsets", Action: "list", Outcome: "collected"},
-			{Resource: "pods", Action: "list", Outcome: "collected"},
-			{Resource: "openbaorestores", Action: "list", Outcome: "collected"},
-		},
-		Related: &evidence.Related{
-			StatefulSets: []evidence.StatefulSet{
-				{
-					Reference:          ref,
-					Generation:         ptr(int64(1)),
-					ObservedGeneration: ptr(int64(1)),
-					Desired:            ptr(int64(1)),
-					Ready:              ptr(int64(1)),
-				},
-			},
-			Pods: []evidence.Pod{
-				{Reference: podRef, Phase: "Running", Ready: ptr(true), Association: evidence.Association{OwnerUID: "set"}},
-			},
-			Restores:  []evidence.Restore{},
-			Omissions: []evidence.Omission{},
-		},
-	}
-}
-
-func TestFindingThresholdAndIncompletePrecedence(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		name       string
-		threshold  Severity
-		incomplete bool
-		want       int
-	}{
-		{"warning threshold", Warning, false, 2},
-		{"error threshold", Error, false, 0},
-		{"disabled finding failure", None, false, 0},
-		{"partial evidence", Warning, true, 3},
-		{"partial evidence with disabled threshold", None, true, 3},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			snapshot := healthySnapshot()
-			snapshot.Related.Pods[0].Ready = ptr(false)
-			snapshot.Related.Pods[0].ReadyReason = "ContainersNotReady"
-			if tc.incomplete {
-				snapshot.Collection[1].Outcome = "failed"
-			}
-			report := Analyze(snapshot, tc.threshold)
-			if report.ExitCode != tc.want || len(report.Findings) != 1 {
-				t.Fatalf("unexpected diagnosis: %+v", report)
-			}
-			if report.Findings[0].RuleID != "KBAO-POD-001" || report.Findings[0].Evidence[0].UID != "pod" {
-				t.Fatal("finding lacks stable rule and resource identity")
-			}
-			if tc.incomplete && len(report.Findings[0].MissingEvidence) == 0 {
-				t.Fatal("finding lost its evidence limitation")
-			}
-		})
-	}
-}
-
-func TestStaleEvidenceCannotProduceCompleteDiagnosis(t *testing.T) {
-	t.Parallel()
-	snapshot := healthySnapshot()
-	snapshot.Observation.Available.GenerationCurrent = ptr(false)
-	snapshot.Observation.Available.Status = "False"
-	report := Analyze(snapshot, Warning)
-	if report.ExitCode != 3 || len(report.Findings) != 1 || len(report.Findings[0].MissingEvidence) == 0 {
-		t.Fatalf("stale availability was treated as current: %+v", report)
-	}
-}
-
-func TestIntentionalControlsAreInformational(t *testing.T) {
-	t.Parallel()
-	snapshot := healthySnapshot()
-	snapshot.Observation.Paused, snapshot.Observation.MaintenanceEnabled = ptr(true), ptr(true)
-	report := Analyze(snapshot, Warning)
-	if report.ExitCode != 0 || len(report.Findings) != 2 {
-		t.Fatalf("intentional restrictions became failures: %+v", report)
-	}
-	for _, finding := range report.Findings {
-		if finding.Severity != Info {
-			t.Fatal("control severity is not informational")
+	read := func(group, version, resource string, action shared.ReadAction, items int) shared.Collection {
+		scope := shared.Scope{Origin: "fixture", Group: group, Version: version, Resource: resource, Namespace: "security", Action: action}
+		if action == shared.ReadGet {
+			scope.Name = "prod"
+		}
+		return shared.Collection{
+			Scope:    scope,
+			Interval: shared.Interval{StartedAt: at, CompletedAt: at},
+			Outcome:  shared.CollectionComplete,
+			Items:    items,
 		}
 	}
-}
-
-func TestHeldRestoreAndHistoricalOutcome(t *testing.T) {
-	t.Parallel()
-	snapshot := healthySnapshot()
-	snapshot.Related.Restores = []evidence.Restore{{
-		Reference: evidence.Reference{UID: "restore", Name: "recovery"},
-		Phase:     "Unknown", OperationID: "operation", ExecutionTargetUID: "cluster",
-	}}
-	if report := Analyze(snapshot, Warning); report.ExitCode != 0 {
-		t.Fatalf("historical outcome became a current fault: %+v", report)
-	}
-	snapshot.Observation.RestoreHold = "operation"
-	report := Analyze(snapshot, Warning)
-	if report.ExitCode != 2 || report.Findings[0].Severity != Error || report.Findings[0].RuleID != "KBAO-RESTORE-001" {
-		t.Fatalf("held uncertain restore was missed: %+v", report)
-	}
-	snapshot.Observation.RestoreHold = "unmatched-operation"
-	if report := Analyze(snapshot, Warning); report.ExitCode != 3 {
-		t.Fatalf("uncorrelated hold appeared complete: %+v", report)
-	}
-}
-
-func TestSerializedEvidenceProducesSameAnalysis(t *testing.T) {
-	t.Parallel()
-	snapshot := healthySnapshot()
-	snapshot.Related.Pods[0].Ready = nil
-	before, err := json.Marshal(snapshot)
+	root := read("openbao.org", "v1alpha1", "openbaoclusters", shared.ReadGet, 1)
+	verification, err := shared.NewTargetVerification(cluster, root, []shared.Cluster{cluster})
 	if err != nil {
 		t.Fatal(err)
 	}
-	live := Analyze(snapshot, Warning)
-	var captured evidence.Snapshot
-	if err := json.Unmarshal(before, &captured); err != nil {
-		t.Fatal(err)
-	}
-	stored := Analyze(captured, Warning)
-	if !reflect.DeepEqual(live, stored) {
-		t.Fatal("live and serialized evidence produced different diagnoses")
-	}
-	after, err := json.Marshal(snapshot)
+	options.Contract = adapter.KubernetesAppsV1
+	set, err := adapter.ProjectStatefulSet(
+		[]byte(
+			`{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "namespace": "security",
+    "name": "prod",
+    "uid": "set",
+    "generation": 1,
+    "ownerReferences": [
+      {
+        "apiVersion": "openbao.org/v1alpha1",
+        "kind": "OpenBaoCluster",
+        "name": "prod",
+        "uid": "cluster",
+        "controller": true
+      }
+    ]
+  },
+  "spec": {
+    "replicas": 1
+  },
+  "status": {
+    "observedGeneration": 1,
+    "readyReplicas": 1
+  }
+}`,
+		),
+		options,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(before, after) || !live.AnalysisTime.Equal(snapshot.CompletedAt) {
-		t.Fatal("analysis mutated evidence or replaced capture time")
+	options.Contract = adapter.KubernetesCoreV1
+	pod, err := adapter.ProjectPod(
+		[]byte(
+			`{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {
+    "namespace": "security",
+    "name": "prod-0",
+    "uid": "pod",
+    "generation": 1,
+    "ownerReferences": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "StatefulSet",
+        "name": "prod",
+        "uid": "set",
+        "controller": true
+      }
+    ]
+  },
+  "status": {
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Ready",
+        "status": "True",
+        "observedGeneration": 1
+      }
+    ]
+  }
+}`,
+		),
+		options,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sets := read("apps", "v1", "statefulsets", shared.ReadList, 1)
+	sets.Scope.Selector = "openbao.org/cluster=prod"
+	pods := read("", "v1", "pods", shared.ReadList, 1)
+	pods.Scope.Selector = sets.Scope.Selector
+	input := diagnose.ClusterInput{
+		Subject:         cluster.Reference.Identity,
+		AdapterContract: cluster.AdapterContract,
+		Observation:     &cluster,
+		Collection:      root,
+		Verification:    &verification,
+		StatefulSets: &diagnose.ResourceInput[shared.StatefulSet]{
+			AdapterContract: string(adapter.KubernetesAppsV1),
+			Collection:      sets,
+			Observations:    []shared.StatefulSet{set},
+		},
+		Pods: &diagnose.ResourceInput[shared.Pod]{
+			AdapterContract: string(adapter.KubernetesCoreV1),
+			Collection:      pods,
+			Observations:    []shared.Pod{pod},
+		},
+		Restores: &diagnose.ResourceInput[shared.Restore]{
+			AdapterContract: cluster.AdapterContract,
+			Collection:      read("openbao.org", "v1alpha1", "openbaorestores", shared.ReadList, 0),
+			Observations:    []shared.Restore{},
+		},
+	}
+	return evidence.Snapshot{
+		SchemaVersion:      "v1",
+		ResultCode:         "completed",
+		StartedAt:          at,
+		CompletedAt:        at.Add(time.Second),
+		Target:             evidence.Target{Context: "fixture", Namespace: "security", Name: "prod", UID: "cluster"},
+		NormalizedEvidence: &diagnose.Capture{SchemaVersion: shared.SchemaVersion, Clusters: []diagnose.ClusterInput{input}},
 	}
 }
 
-func TestMissingSnapshotAndInvalidThreshold(t *testing.T) {
-	t.Parallel()
-	if report := Analyze(evidence.Snapshot{}, Warning); report.ExitCode != 3 {
-		t.Fatal("empty evidence appeared complete")
+func TestSharedAnalysisReplayAndIndependentFindingIdentity(t *testing.T) {
+	snapshot := captureFixture(t)
+	input := &snapshot.NormalizedEvidence.Clusters[0]
+	input.Pods.Observations[0].Conditions.Values[0].Status = shared.ConditionFalse
+	second := input.Pods.Observations[0]
+	second.Metadata.Reference.Identity.Name = "prod-1"
+	second.Metadata.Reference.Identity.UID = "pod-2"
+	input.Pods.Observations = append(input.Pods.Observations, second)
+	input.Pods.Collection.Items = 2
+	policy := Policy(snapshot.CompletedAt)
+	report, err := Analyze(snapshot, policy)
+	if err != nil || !report.Complete || len(report.Findings) != 2 {
+		t.Fatalf("analysis: %+v, %v", report, err)
 	}
-	if report := Analyze(healthySnapshot(), Severity("invalid")); report.ExitCode != 1 {
-		t.Fatal("invalid threshold accepted")
+	if report.Findings[0].ID == report.Findings[1].ID {
+		t.Fatal("per-Pod identity collapsed")
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded evidence.Snapshot
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := Analyze(decoded, policy)
+	if err != nil || !reflect.DeepEqual(report, replay) {
+		t.Fatal("serialized evidence changed pure analysis")
+	}
+	if strings.Contains(string(data), `"exitCode"`) {
+		t.Fatal("process result entered evidence")
 	}
 }
 
-func TestMissingPodPopulationIsReported(t *testing.T) {
-	t.Parallel()
-	snapshot := healthySnapshot()
-	snapshot.Related.StatefulSets[0].Desired, snapshot.Related.StatefulSets[0].Ready = ptr(int64(3)), ptr(int64(3))
-	report := Analyze(snapshot, Warning)
-	if report.ExitCode != 2 || len(report.Findings) != 1 || report.Findings[0].RuleID != "KBAO-POD-001" {
-		t.Fatalf("missing associated Pod population was not reported: %+v", report)
+func TestIncompleteCoverageRetainsIndependentFindings(t *testing.T) {
+	snapshot := captureFixture(t)
+	input := &snapshot.NormalizedEvidence.Clusters[0]
+	input.Observation.Conditions.Values[0].Status = shared.ConditionFalse
+	input.Pods.Collection.Outcome = shared.CollectionDenied
+	input.Pods.Collection.Items = 0
+	input.Pods.Observations = []shared.Pod{}
+	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	if err != nil || report.Complete || len(report.Findings) != 1 || report.Findings[0].RuleID != string(diagnose.RuleAvailability) {
+		t.Fatalf("independent finding lost: %+v, %v", report, err)
+	}
+}
+
+func TestOnlyNormalizedEvidenceDrivesAnalysis(t *testing.T) {
+	snapshot := captureFixture(t)
+	snapshot.Observation = &evidence.Observation{Phase: "Failed"}
+	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	if err != nil || !report.Complete || len(report.Findings) != 0 {
+		t.Fatalf("legacy display drove diagnosis: %+v %v", report, err)
+	}
+	snapshot.NormalizedEvidence.SchemaVersion = "unsupported"
+	if _, err := Analyze(snapshot, Policy(snapshot.CompletedAt)); err == nil {
+		t.Fatal("invalid normalized evidence was accepted")
 	}
 }

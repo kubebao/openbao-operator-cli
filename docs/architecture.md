@@ -33,12 +33,12 @@ The implementation will separate:
 - Guarded control requests and their verification predicates.
 - Human-readable and versioned JSON rendering.
 
-`internal/evidence` holds shared observations and sanitization. `internal/collect` handles Kubernetes access, ownership
-association, and version-specific projections. `internal/status` renders status. `internal/doctor` interprets observations
-and renders findings without importing Kubernetes clients. Bundle handling and controls are not implemented.
-
-Share evidence semantics and representative fixtures with the console. Extract a public interpretation package after
-its boundary is established.
+`github.com/kubebao/openbao-operator-client` owns typed evidence, approved public API projection, bounded collection,
+UID associations, and pure diagnostic rules. `internal/collect` configures the caller's kubeconfig transport, declares
+command scopes, and maps shared facts to CLI presentation. `internal/evidence` holds display models and the typed
+normalized capture; `internal/doctor` selects policy and maps shared findings. Neither package imports Kubernetes clients.
+`internal/status` and doctor render text. Command wrappers own JSON process envelopes, thresholds, and exit codes.
+Bundle handling and lifecycle controls remain unimplemented.
 
 ## Evidence and bundles
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
 	"github.com/kubebao/openbao-operator-cli/internal/collect"
-	"github.com/kubebao/openbao-operator-cli/internal/status"
 )
 
 type commandResult struct {
@@ -45,11 +44,12 @@ func newStatusCommand(info buildinfo.Info) *cobra.Command {
 				return err
 			}
 			for {
-				report := client.Collect(command.Context())
+				snapshot := client.Collect(command.Context())
+				report := makeStatusReport(snapshot)
 				if watch && command.Context().Err() != nil {
 					return nil
 				}
-				if err := status.Write(command.OutOrStdout(), report, output, verbose); err != nil {
+				if err := writeStatus(command.OutOrStdout(), report, output, verbose); err != nil {
 					return err
 				}
 				if report.ExitCode != 0 {
@@ -71,7 +71,7 @@ func newStatusCommand(info buildinfo.Info) *cobra.Command {
 	flags := command.Flags()
 	addKubernetesFlags(command, &options)
 	flags.StringVarP(&output, "output", "o", output, "Output format: text or json (newline-delimited in watch mode)")
-	flags.BoolVarP(&verbose, "verbose", "v", verbose, "Include condition messages, evidence fields, and interpretation limits")
+	flags.BoolVarP(&verbose, "verbose", "v", verbose, "Include evidence fields, structured reasons, and interpretation limits")
 	flags.BoolVarP(&watch, "watch", "w", watch, "Refresh the selected resource until interrupted or collection fails")
 	flags.DurationVar(&interval, "watch-interval", interval, "Delay between watch collections; minimum 100ms")
 	return command

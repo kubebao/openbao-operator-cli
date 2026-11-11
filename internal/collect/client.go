@@ -1,25 +1,30 @@
+// Package collect orchestrates caller-scoped shared client reads.
 package collect
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
-	"github.com/kubebao/openbao-operator-cli/internal/evidence"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/kubebao/openbao-operator-client/adapter"
+	clientcollect "github.com/kubebao/openbao-operator-client/collect"
+	"github.com/kubebao/openbao-operator-client/diagnose"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
+
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
-var apiGroups = []string{"openbao.org", "kubebao.org"}
+const (
+	apiGroup      = "openbao.org"
+	maxCandidates = 1000
+)
 
 type Options struct {
 	Kubeconfig     string
@@ -31,23 +36,22 @@ type Options struct {
 	UserAgent      string
 }
 
-// Client reads only the named OpenBaoCluster and API discovery endpoints.
-// After the first selection, it pins both the API group and resource UID.
+// Client pins the selected API group and UID after its first successful read.
+// Status reads discovery and the named cluster only. Doctor declares additional scopes.
 type Client struct {
-	resources dynamic.Interface
-	discovery rest.Interface
-	target    evidence.Target
-	group     string
-	uid       string
-	timeout   time.Duration
+	shared  *clientcollect.Client
+	target  evidence.Target
+	origin  string
+	uid     string
+	timeout time.Duration
 }
 
 func NewClient(options Options) (*Client, error) {
 	if len(validation.IsDNS1123Subdomain(options.Name)) != 0 {
 		return nil, errors.New("cluster name must be a Kubernetes DNS subdomain")
 	}
-	if options.APIGroup != "" && options.APIGroup != apiGroups[0] && options.APIGroup != apiGroups[1] {
-		return nil, errors.New("unsupported API group: use openbao.org or kubebao.org")
+	if options.APIGroup != "" && options.APIGroup != apiGroup {
+		return nil, errors.New("unsupported API group: the approved client contract is openbao.org/v1alpha1")
 	}
 	if options.RequestTimeout <= 0 {
 		return nil, errors.New("request timeout must be greater than zero")
@@ -67,9 +71,12 @@ func NewClient(options Options) (*Client, error) {
 	if !ok || selected == nil {
 		return nil, errors.New("selected Kubernetes context does not exist; check --context and kubeconfig")
 	}
-	loader := clientcmd.NewNonInteractiveClientConfig(*raw, contextName, &clientcmd.ConfigOverrides{
-		Context: clientcmdapi.Context{Namespace: options.Namespace},
-	}, rules)
+	loader := clientcmd.NewNonInteractiveClientConfig(
+		*raw,
+		contextName,
+		&clientcmd.ConfigOverrides{Context: clientcmdapi.Context{Namespace: options.Namespace}},
+		rules,
+	)
 	namespace, _, err := loader.Namespace()
 	if err != nil || len(validation.IsDNS1123Label(namespace)) != 0 {
 		return nil, errors.New("cannot resolve a valid Kubernetes namespace; check --namespace and kubeconfig")
@@ -81,132 +88,168 @@ func NewClient(options Options) (*Client, error) {
 	config.Timeout = options.RequestTimeout
 	config.UserAgent = options.UserAgent
 	config.WarningHandler = rest.NoWarnings{}
-	resources, err := dynamic.NewForConfig(config)
+	transport, err := rest.TransportFor(config)
 	if err != nil {
-		return nil, errors.New("cannot initialize Kubernetes resource access")
+		return nil, errors.New("cannot initialize Kubernetes transport")
 	}
-	discover, err := discovery.NewDiscoveryClientForConfig(config)
+	client, err := clientcollect.NewClient(config.Host, transport)
 	if err != nil {
-		return nil, errors.New("cannot initialize Kubernetes discovery")
+		return nil, errors.New("cannot initialize bounded Kubernetes access")
 	}
+	// The origin is stable for this kubeconfig cluster and endpoint, without serializing the endpoint or credentials.
+	sum := sha256.Sum256([]byte(selected.Cluster + "\x00" + config.Host))
 	return &Client{
-		resources: resources, discovery: discover.RESTClient(),
+		shared:  client,
+		origin:  "kubeconfig:" + hex.EncodeToString(sum[:16]),
+		timeout: options.RequestTimeout,
 		target: evidence.Target{
-			Context: evidence.Clean(contextName), KubernetesCluster: evidence.Clean(selected.Cluster),
-			Namespace: namespace, Name: options.Name,
+			Context:           evidence.Clean(contextName),
+			KubernetesCluster: evidence.Clean(selected.Cluster),
+			Namespace:         namespace,
+			Name:              options.Name,
+			APIGroup:          apiGroup,
+			APIVersion:        apiGroup + "/v1alpha1",
 		},
-		group: options.APIGroup, timeout: options.RequestTimeout,
 	}, nil
 }
 
-func (c *Client) Collect(ctx context.Context) evidence.Snapshot {
-	report := evidence.Snapshot{
-		SchemaVersion: "v1", ResultCode: "completed", StartedAt: time.Now().UTC(),
-		Target: c.target, Collection: []evidence.Step{},
+func (c *Client) request(contract adapter.Contract, group, version, resource string, action shared.ReadAction) clientcollect.Request {
+	limits := clientcollect.DefaultLimits()
+	limits.MaxPages, limits.MaxCandidates, limits.PageSize = 16, maxCandidates, 100
+	limits.MaxBytes, limits.MaxRetainedBytes, limits.MaxResponseBytes = 16*1024*1024, 16*1024*1024, 8*1024*1024
+	limits.Timeout = c.timeout
+	projection := adapter.DefaultProjectionLimits()
+	projection.MaxBytes = limits.MaxResponseBytes
+	scope := shared.Scope{Origin: c.origin, Group: group, Version: version, Resource: resource, Action: action}
+	if action != shared.ReadDiscovery {
+		scope.Namespace = c.target.Namespace
 	}
-	if c.group != "" {
-		report.Target.APIGroup, report.Target.APIVersion = c.group, c.group+"/v1alpha1"
+	if action == shared.ReadGet {
+		scope.Name = c.target.Name
+	}
+	return clientcollect.Request{Scope: scope, Contract: contract, Limits: limits, Projection: projection}
+}
+
+func (c *Client) clusterRequest() clientcollect.Request {
+	request := c.request(adapter.V1Alpha1Snapshot, apiGroup, "v1alpha1", "openbaoclusters", shared.ReadGet)
+	request.ExpectedUID = c.uid
+	return request
+}
+
+func (c *Client) Collect(ctx context.Context) evidence.Snapshot {
+	snapshot := evidence.Snapshot{
+		SchemaVersion: "v1",
+		ResultCode:    "completed",
+		StartedAt:     time.Now().UTC(),
+		Target:        c.target,
+		Collection:    []evidence.Step{},
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	groups := apiGroups
-	if c.group != "" {
-		groups = []string{c.group}
-	}
-	type candidate struct {
-		group  string
-		object *unstructured.Unstructured
-	}
-	var candidates []candidate
-	for _, group := range groups {
-		if c.uid == "" {
-			step := c.discover(ctx, group)
-			report.Collection = append(report.Collection, step)
-			if step.Outcome != "collected" {
-				continue
-			}
-		}
-		resource := c.resources.Resource(schema.GroupVersionResource{Group: group, Version: "v1alpha1", Resource: "openbaoclusters"})
-		object, err := resource.Namespace(c.target.Namespace).Get(ctx, c.target.Name, metav1.GetOptions{})
-		step := evidence.Step{APIGroup: group, Action: "get", Outcome: outcome(err), CollectedAt: time.Now().UTC()}
-		if err == nil {
-			step.UID, step.ResourceVersion = evidence.Clean(string(object.GetUID())), evidence.Clean(object.GetResourceVersion())
-		}
-		report.Collection = append(report.Collection, step)
-		if err == nil {
-			candidates = append(candidates, candidate{group: group, object: object})
-		}
-	}
-	for _, step := range report.Collection {
-		if step.Outcome != "collected" && step.Outcome != "not_found" && step.Outcome != "not_applicable" {
-			report.ResultCode, report.ExitCode = "incomplete", 3
-		}
-	}
-	switch len(candidates) {
-	case 0:
-		if report.ExitCode == 0 {
-			report.ResultCode, report.ExitCode = "not_found", 1
-			if c.uid != "" {
-				report.ResultCode, report.ExitCode = "resource_deleted", 3
-			}
-		}
-	case 1:
-		chosen := candidates[0]
-		object := chosen.object
-		if string(object.GetUID()) == "" || object.GetName() != c.target.Name || object.GetNamespace() != c.target.Namespace ||
-			object.GetAPIVersion() != chosen.group+"/v1alpha1" || object.GetKind() != "OpenBaoCluster" {
-			report.ResultCode, report.ExitCode = "invalid_resource", 3
-			break
-		}
-		if c.uid != "" && c.uid != string(object.GetUID()) {
-			report.ResultCode, report.ExitCode = "resource_replaced", 3
-			break
-		}
-		observation, err := ProjectV1Alpha1(object, time.Now().UTC())
+	c.collect(ctx, &snapshot)
+	snapshot.CompletedAt = time.Now().UTC()
+	return snapshot
+}
+
+func (c *Client) collect(ctx context.Context, snapshot *evidence.Snapshot) {
+	if c.uid == "" {
+		request := c.request(adapter.V1Alpha1Snapshot, apiGroup, "v1alpha1", "openbaoclusters", shared.ReadDiscovery)
+		result, err := c.shared.Discover(ctx, request)
 		if err != nil {
-			report.ResultCode, report.ExitCode = "invalid_resource", 3
-			break
+			snapshot.ResultCode = "incomplete"
+			return
 		}
-		c.group, c.uid = chosen.group, string(object.GetUID())
-		c.target.APIGroup, c.target.APIVersion, c.target.UID = c.group, c.group+"/v1alpha1", evidence.Clean(c.uid)
-		report.Target, report.Observation = c.target, observation
-	default:
-		report.ResultCode, report.ExitCode = "ambiguous_api_group", 1
-	}
-	report.CompletedAt = time.Now().UTC()
-	return report
-}
-
-func (c *Client) discover(ctx context.Context, group string) evidence.Step {
-	var resources metav1.APIResourceList
-	err := c.discovery.Get().AbsPath("/apis", group, "v1alpha1").Do(ctx).Into(&resources)
-	step := evidence.Step{APIGroup: group, Action: "discover", Outcome: outcome(err), CollectedAt: time.Now().UTC()}
-	if apierrors.IsNotFound(err) {
-		step.Outcome = "not_applicable"
-	}
-	if err == nil {
-		step.Outcome = "unsupported"
-		for _, resource := range resources.APIResources {
-			if resource.Name == "openbaoclusters" && resource.Kind == "OpenBaoCluster" && resource.Namespaced {
-				step.Outcome = "collected"
-				break
+		step := collectionStep(result.Collection)
+		step.Action = "discover"
+		if result.Collection.Outcome == shared.CollectionUnsupported {
+			step.Outcome = "not_applicable"
+		}
+		snapshot.Collection = append(snapshot.Collection, step)
+		if result.Collection.Outcome != shared.CollectionComplete {
+			snapshot.ResultCode = "incomplete"
+			if result.Collection.Outcome == shared.CollectionUnsupported {
+				snapshot.ResultCode = "not_found"
 			}
+			return
+		}
+		if len(result.Observations) != 1 || !discovered(result.Observations[0]) {
+			snapshot.Collection[len(snapshot.Collection)-1].Outcome = "unsupported"
+			snapshot.ResultCode = "incomplete"
+			return
 		}
 	}
-	return step
+	result, err := c.shared.Clusters(ctx, c.clusterRequest())
+	if err != nil {
+		snapshot.ResultCode = "incomplete"
+		return
+	}
+	step := collectionStep(result.Collection)
+	if len(result.Observations) == 1 {
+		step.UID = result.Observations[0].Reference.Identity.UID
+		step.ResourceVersion = text(result.Observations[0].Reference.ResourceVersion)
+	}
+	snapshot.Collection = append(snapshot.Collection, step)
+	if result.Collection.Outcome != shared.CollectionComplete || len(result.Observations) != 1 {
+		snapshot.ResultCode = "incomplete"
+		switch result.Collection.Outcome {
+		case shared.CollectionDeleted:
+			snapshot.ResultCode = "not_found"
+			if c.uid != "" {
+				snapshot.ResultCode = "resource_deleted"
+			}
+		case shared.CollectionReplaced:
+			snapshot.ResultCode = "resource_replaced"
+		case shared.CollectionInvalid:
+			snapshot.ResultCode = "invalid_resource"
+		}
+		return
+	}
+	cluster := result.Observations[0]
+	c.uid = cluster.Reference.Identity.UID
+	c.target.UID = c.uid
+	snapshot.Target = c.target
+	snapshot.Observation = projectCluster(cluster)
+	snapshot.NormalizedEvidence = &diagnose.Capture{
+		SchemaVersion: shared.SchemaVersion,
+		Clusters: []diagnose.ClusterInput{
+			{
+				Subject:         cluster.Reference.Identity,
+				AdapterContract: cluster.AdapterContract,
+				Observation:     &cluster,
+				Collection:      result.Collection,
+			},
+		},
+	}
 }
 
-func outcome(err error) string {
-	switch {
-	case err == nil:
+func discovered(value shared.Discovery) bool {
+	return value.State == shared.ObjectReported && value.Kind.Value != nil && *value.Kind.Value == "OpenBaoCluster" &&
+		value.Namespaced.Value != nil &&
+		*value.Namespaced.Value
+}
+
+func collectionStep(read shared.Collection) evidence.Step {
+	return evidence.Step{
+		Resource: read.Scope.Resource, Namespace: read.Scope.Namespace, Name: read.Scope.Name, APIGroup: read.Scope.Group,
+		Action: string(read.Scope.Action), Outcome: outcome(read.Outcome), CollectedAt: read.Interval.CompletedAt,
+	}
+}
+
+func outcome(value shared.CollectionOutcome) string {
+	switch value {
+	case shared.CollectionComplete:
 		return "collected"
-	case apierrors.IsNotFound(err):
+	case shared.CollectionDenied:
+		return "denied"
+	case shared.CollectionDeleted:
 		return "not_found"
-	case apierrors.IsForbidden(err):
-		return "forbidden"
-	case apierrors.IsUnauthorized(err):
-		return "unauthorized"
+	case shared.CollectionUnsupported:
+		return "not_applicable"
+	case shared.CollectionPageLimit, shared.CollectionSizeLimit:
+		return "limit_reached"
+	case shared.CollectionPaginationLoop:
+		return "repeated_continue_token"
 	default:
-		return "failed"
+		return string(value)
 	}
 }

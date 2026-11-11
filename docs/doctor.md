@@ -1,6 +1,6 @@
 # Diagnose workload and recovery observations
 
-`kubebao doctor` collects selected Kubernetes evidence and explains workload readiness and recovery restrictions.
+`kubebao doctor` collects Kubernetes evidence and maps shared diagnostic results into CLI findings.
 
 ```sh
 kubebao doctor prod -n security
@@ -9,97 +9,88 @@ kubebao doctor prod -n security --output json
 kubebao doctor prod -n security --fail-on error
 ```
 
-The command accepts the same kubeconfig, context, namespace, API-group, and request-timeout options as
-[status](status.md). It does not change cluster state, collect logs, read Secrets, or contact OpenBao or cloud APIs.
-Bundle creation and `doctor --bundle` are not implemented.
+The command accepts the [status](status.md) connection options and the approved `openbao.org/v1alpha1` contract.
+It does not mutate resources, collect logs, read Secrets, or contact OpenBao or cloud APIs. Bundle commands and local
+provider-text projection are not implemented.
 
-## Evidence collection
+## Reads and association
 
-The command first resolves the named `OpenBaoCluster` using the status collector. It then:
+The CLI resolves the named cluster with status collection, then declares these shared reads:
 
-1. Lists StatefulSet candidates with `openbao.org/cluster=<name>` and verifies their controller reference against the
-   cluster API version, kind, name, namespace, and UID. A conflicting reserved owner-UID annotation prevents association.
-2. Lists Pod candidates with the same label and verifies their controller reference against a collected StatefulSet's
-   name and UID. Pods controlled by other workload kinds are outside this initial workload scope.
-3. Inspects restore requests in the selected namespace. It retains requests bound through `status.execution.targetUID`,
-   `status.target.uid`, or a documented cluster-side restore origin or hold that identifies the request UID. A matching
-   `spec.cluster` name alone does not prove association. Conflicting target identities remain unverified.
-4. Reads the selected cluster again. A changed UID or generation makes diagnosis incomplete. Both read identities remain
-   in the collection record, including the final generation when readable. Missing generation evidence also prevents
-   verified target stability. A status-only update can change resourceVersion without invalidating the selected UID and
-   generation.
+1. List StatefulSets in the selected namespace with `openbao.org/cluster=<name>`.
+2. List Pods in that namespace with the same selector.
+3. List snapshot restore candidates in that namespace without a selector.
+4. GET the original named cluster again with the selected UID pinned.
 
-Lists use pages of 100 candidates and inspect at most 1,000 candidates per resource kind. A candidate limit, repeated
-continuation token, inconsistent list versions, duplicate UID, or invalid resource identity makes collection incomplete.
-The limit includes unrelated restore requests inspected before filtering. Unrelated resources are not included in the
-evidence. Ambiguous candidates produce metadata-only omissions with a reason, visible with `--verbose` or JSON output.
+The shared client verifies controller references and reserved UID metadata. Names and labels identify candidates only.
+Pod membership requires the exact StatefulSet UID and a confirmed parent chain. A proven foreign chain is excluded from
+target findings and population; conflicting or unconfirmed candidates limit coverage. Restore binding requires target
+UID, execution target UID, or a request-UID-bound restore origin. A hold, operation ID, target name, or creation time alone
+does not prove ownership. Native recovery and a migrated API group are unsupported.
 
-Legacy completed requests without target-UID bindings remain unassociated even when their target name matches. Retaining
-such requests can make diagnosis incomplete; the CLI does not infer their ownership or current relevance from the name.
+Missing, changed, deleted, replaced, or failed final target verification prevents current related-resource findings.
+The original identity remains selected. A status-only resourceVersion change does not invalidate matching positive UID
+and metadata generation. Verification does not establish an atomic snapshot.
 
-Denied or failed reads preserve independent evidence already collected. An absent restore API is recorded as not
-applicable. A restore hold that cannot be correlated still limits the restore rule's conclusion. Collection occurs over
-an interval and is not an atomic Kubernetes snapshot. Each retained resource records its identity, resourceVersion, and
-collection time.
+Each kind allows 1,000 candidates, 100 per page, 16 requests, 16 MiB transferred and retained, and 8 MiB per response.
+The related sequence shares a 64-request, 3,000-candidate, 48 MiB transfer/retention budget and reserves a final
+verification request. The entire command shares the requested deadline, including the initial cluster read. A limit,
+pagination loop, invalid envelope, inconsistent list version, or duplicate identity prevents complete collection.
+Independent approved evidence remains available after another scope fails.
 
-## Initial rules
+## Rules and completeness
 
-The rule-set version is independent of the JSON schema version. Current rule-set version: `1`.
+The rule-set version comes from the pinned library and is independent of command schema version `v1`.
 
-| Rule | Evidence and interpretation |
+| Rule | Selected interpretation |
 | --- | --- |
-| `KBAO-CLUSTER-001` | Reported availability and its resource and condition generation acknowledgement |
-| `KBAO-WORKLOAD-001` | Associated StatefulSet desired and Ready counts for its observed generation |
-| `KBAO-POD-001` | Associated Pod population, Ready conditions, Failed phase, and reported container waiting reasons |
-| `KBAO-RESTRICTION-001` | Positively declared pause, maintenance, restore holds, and active break glass |
-| `KBAO-RESTORE-001` | UID-correlated restore progress and a held Failed or Unknown outcome |
+| `KBAO-CLUSTER-001` | Current resource and Available-condition acknowledgement |
+| `KBAO-WORKLOAD-001` | UID-associated StatefulSet readiness and its generation |
+| `KBAO-POD-001` | UID-associated Pod phase, condition acknowledgement, readiness, and population |
+| `KBAO-RESTRICTION-001` | Positively reported pause, maintenance, restore holds, and active break glass |
+| `KBAO-RESTORE-001` | UID-confirmed restore progress and a correlated held failure or unknown outcome |
 
-Each finding includes a stable rule identifier, severity, description, resource and field references, suggested checks,
-and any missing evidence that limits that rule. Errors appear before warnings and informational findings.
+Findings have canonical rule IDs, subject-specific stable IDs, references, structured severities, suggested checks, and
+coverage limits. Library critical and error severities map to CLI `error`; warning and info retain their names. Separate
+Pods and restore requests retain separate identities. Summaries come from the shared rule implementation.
 
-Pause, maintenance, and restore holds are informational restrictions rather than automatic failures. A historical restore
-outcome without a matching current hold is not treated as a current recovery failure. The restriction rule reports
-positively declared controls; absent optional configuration fields remain unknown in the evidence and do not establish
-that a control is disabled.
+The CLI policy excludes historical restore failures without a current correlated hold. In-progress confirmed requests
+can produce informational findings. Pause, maintenance, and holds remain independent restrictions. Missing optional
+controls do not prove that they are disabled. An unavailable restore API is incomplete evidence, not proof that restore
+analysis is inapplicable. Pod condition acknowledgement is independent of cluster or StatefulSet acknowledgement.
 
-Missing readiness fields and stale generation acknowledgement prevent complete evaluation of the affected readiness
-rule. A condition transition time does not establish recent reconciliation. Reported readiness is not an independent
-OpenBao health probe or a quorum check. No operator release has been qualified.
+Coverage is `evaluated`, `not_applicable`, or `insufficient_evidence` for the selected rules. The policy receives the
+capture completion time as its analysis reference. Missing evidence can prevent complete evaluation while independent
+confirmed findings remain visible. The selected rules do not validate tenant provisioning, backup/upgrade Jobs, TLS,
+networking, storage health, Events, maintenance propagation, OpenBao transactions, or quorum safety.
 
-Tenant provisioning, backup and upgrade Jobs, TLS and networking prerequisites, PVCs, Services, and Events are outside
-this initial rule set. The command makes no claim to validate those paths. Maintenance annotation observations do not
-constitute verified propagation.
+## Output and process results
 
-## Permissions and data handling
+JSON retains the command envelope fields `schemaVersion`, `ruleSetVersion`, `analysisTime`, `failureThreshold`,
+`resultCode`, `exitCode`, `findings`, `coverage`, and `evidence`. It adds the actual shared `policy` and finding `id`.
+The evidence envelope adds `normalizedEvidence`, containing every admitted candidate before association filtering,
+including foreign candidates. These bounded, approved facts preserve collection counts and deterministic replay.
+The legacy `related` view contains confirmed associations and metadata-only omissions. Provider messages and raw
+resource configuration are excluded from both views.
 
-In addition to status's named-cluster `get` and discovery access, doctor requires namespace-scoped `list` on:
+Normalized evidence and policy can be serialized and evaluated with the shared analyzer without network access. Display
+fields and command exit codes are not analysis inputs. The CLI keeps thresholds and process decisions in command
+wrappers; the library and pure analysis report contain no command exit code.
 
-- `apps/v1` StatefulSets.
-- `v1` Pods.
-- `OpenBaoRestore` resources in the selected operator API group.
+`--fail-on` selects the lowest severity that fails the command: `info`, `warning` (default), or `error`. `none` disables
+finding-based failure while retaining collection and evaluation failures.
 
-The command does not grant these permissions. It requires no Pod log or exec access. Field projections exclude workload
-configuration, literal environment values, container arguments, arbitrary annotations, restore source objects,
-authentication references, and break-glass nonces. Approved diagnostic text receives additional credential-pattern
-redaction. Resource names and diagnostic messages can still require review before sharing.
+- `0`: collection and selected analysis complete without a finding at the threshold.
+- `1`: invalid input, configuration/output failure, or missing target.
+- `2`: a confirmed finding meets the threshold.
+- `3`: collection or selected evaluation is incomplete, including target verification failure.
 
-## JSON and exit codes
+Incomplete diagnosis takes precedence over findings. Reports go to standard output; nonzero process results also write
+a short message to standard error. Resource names and approved operational metadata remain in the evidence.
 
-JSON output uses `schemaVersion: "v1"` and contains `ruleSetVersion`, `analysisTime`, `failureThreshold`, `resultCode`,
-`exitCode`, `findings`, `coverage`, and `evidence`. The evidence contains the shared snapshot, related projections,
-omissions, and collection outcomes. References identify resources and fields within that evidence.
+## Permissions
 
-Coverage is `evaluated`, `not_applicable`, or `insufficient_evidence` for each rule. The analysis reference time is the
-capture's completion time. Rules make no network requests. Serializing and reading equivalent evidence preserves the
-analysis result, which provides the foundation for later offline bundle analysis.
-
-`--fail-on` selects the lowest severity that returns exit code `2`: `info`, `warning` (default), or `error`. `none` disables
-finding-based failure while preserving execution and incomplete-diagnosis failures.
-
-- `0`: collection and applicable rules completed without a finding at the selected failure threshold.
-- `1`: invalid input, configuration or output failure, missing target, or ambiguous API-group selection.
-- `2`: one or more findings meet the selected threshold.
-- `3`: collection or applicable rule evaluation is incomplete.
-
-Incomplete diagnosis takes precedence over findings. Confirmed findings remain in the report when other evidence is
-missing. Standard output contains the report; a nonzero result also writes a short result message to standard error.
+Doctor needs status's named-cluster GET and discovery access, plus namespace LIST on `apps/v1` StatefulSets, core `v1`
+Pods, and `openbao.org/v1alpha1` restores. It grants no permissions and reads no Pod logs, exec sessions, Secrets,
+container arguments, literal environment values, arbitrary annotations, restore source payloads, or authentication
+references. No existing environment is required for the synthetic command tests.
