@@ -17,12 +17,12 @@ import (
 	clientcollect "github.com/kubebao/openbao-operator-client/collect"
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
+	"github.com/kubebao/openbao-operator-client/operations"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
 const (
-	apiGroup      = "openbao.org"
 	maxCandidates = 1000
 )
 
@@ -39,19 +39,21 @@ type Options struct {
 // Client pins the selected API group and UID after its first successful read.
 // Status reads discovery and the named cluster only. Doctor declares additional scopes.
 type Client struct {
-	shared  *clientcollect.Client
-	target  evidence.Target
-	origin  string
-	uid     string
-	timeout time.Duration
+	shared   *clientcollect.Client
+	controls *operations.Client
+	contract adapter.Contract
+	target   evidence.Target
+	origin   string
+	uid      string
+	timeout  time.Duration
 }
 
 func NewClient(options Options) (*Client, error) {
 	if len(validation.IsDNS1123Subdomain(options.Name)) != 0 {
 		return nil, errors.New("cluster name must be a Kubernetes DNS subdomain")
 	}
-	if options.APIGroup != "" && options.APIGroup != apiGroup {
-		return nil, errors.New("unsupported API group: the approved client contract is openbao.org/v1alpha1")
+	if options.APIGroup != "" && options.APIGroup != "openbao.org" && options.APIGroup != "kubebao.org" {
+		return nil, errors.New("unsupported API group: use kubebao.org or openbao.org")
 	}
 	if options.RequestTimeout <= 0 {
 		return nil, errors.New("request timeout must be greater than zero")
@@ -96,19 +98,23 @@ func NewClient(options Options) (*Client, error) {
 	if err != nil {
 		return nil, errors.New("cannot initialize bounded Kubernetes access")
 	}
+	controls, err := operations.NewClient(config.Host, transport)
+	if err != nil {
+		return nil, errors.New("cannot initialize guarded Kubernetes controls")
+	}
 	// The origin is stable for this kubeconfig cluster and endpoint, without serializing the endpoint or credentials.
 	sum := sha256.Sum256([]byte(selected.Cluster + "\x00" + config.Host))
 	return &Client{
-		shared:  client,
-		origin:  "kubeconfig:" + hex.EncodeToString(sum[:16]),
-		timeout: options.RequestTimeout,
+		shared:   client,
+		controls: controls,
+		origin:   "kubeconfig:" + hex.EncodeToString(sum[:16]),
+		timeout:  options.RequestTimeout,
 		target: evidence.Target{
 			Context:           evidence.Clean(contextName),
 			KubernetesCluster: evidence.Clean(selected.Cluster),
 			Namespace:         namespace,
 			Name:              options.Name,
-			APIGroup:          apiGroup,
-			APIVersion:        apiGroup + "/v1alpha1",
+			APIGroup:          options.APIGroup,
 		},
 	}, nil
 }
@@ -131,7 +137,7 @@ func (c *Client) request(contract adapter.Contract, group, version, resource str
 }
 
 func (c *Client) clusterRequest() clientcollect.Request {
-	request := c.request(adapter.V1Alpha1Snapshot, apiGroup, "v1alpha1", "openbaoclusters", shared.ReadGet)
+	request := c.request(c.contract, c.target.APIGroup, "v1alpha1", "openbaoclusters", shared.ReadGet)
 	request.ExpectedUID = c.uid
 	return request
 }
@@ -152,31 +158,8 @@ func (c *Client) Collect(ctx context.Context) evidence.Snapshot {
 }
 
 func (c *Client) collect(ctx context.Context, snapshot *evidence.Snapshot) {
-	if c.uid == "" {
-		request := c.request(adapter.V1Alpha1Snapshot, apiGroup, "v1alpha1", "openbaoclusters", shared.ReadDiscovery)
-		result, err := c.shared.Discover(ctx, request)
-		if err != nil {
-			snapshot.ResultCode = "incomplete"
-			return
-		}
-		step := collectionStep(result.Collection)
-		step.Action = "discover"
-		if result.Collection.Outcome == shared.CollectionUnsupported {
-			step.Outcome = "not_applicable"
-		}
-		snapshot.Collection = append(snapshot.Collection, step)
-		if result.Collection.Outcome != shared.CollectionComplete {
-			snapshot.ResultCode = "incomplete"
-			if result.Collection.Outcome == shared.CollectionUnsupported {
-				snapshot.ResultCode = "not_found"
-			}
-			return
-		}
-		if len(result.Observations) != 1 || !discovered(result.Observations[0]) {
-			snapshot.Collection[len(snapshot.Collection)-1].Outcome = "unsupported"
-			snapshot.ResultCode = "incomplete"
-			return
-		}
+	if c.contract == "" && !c.selectAPI(ctx, snapshot) {
+		return
 	}
 	result, err := c.shared.Clusters(ctx, c.clusterRequest())
 	if err != nil {

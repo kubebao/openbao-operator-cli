@@ -133,7 +133,7 @@ func (b Bundle) Validate() error {
 
 func validateMetadata(m Manifest) error {
 	switch m.CollectionResult {
-	case "completed", "incomplete", "not_found", "invalid_resource", "resource_deleted", "resource_replaced",
+	case "completed", "incomplete", "not_found", "ambiguous_api_group", "invalid_resource", "resource_deleted", "resource_replaced",
 		"target_changed", "target_verification_incomplete":
 	default:
 		return errors.New("invalid bundle collection result")

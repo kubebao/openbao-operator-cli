@@ -168,6 +168,10 @@ func TestRejectsUnsafeAndUnsupportedArchives(t *testing.T) {
 		{name: "future version", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"formatVersion":"v1"`), []byte(`"formatVersion":"future"`), 1)
 		}},
+		{name: "old evidence schema", change: func(e map[string][]byte) {
+			e["manifest.json"] = bytes.Replace(e["manifest.json"],
+				[]byte(`"evidenceSchemaVersion":"4"`), []byte(`"evidenceSchemaVersion":"2"`), 1)
+		}},
 		{name: "duplicate JSON key", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(
 				e["manifest.json"],

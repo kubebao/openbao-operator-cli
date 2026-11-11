@@ -45,7 +45,7 @@ users:
 func TestCollectionUsesOnlyTheApprovedAPIGroup(t *testing.T) {
 	t.Parallel()
 	for _, group := range []string{"", "openbao.org"} {
-		server := collectionServer(t, 404, true)
+		server := collectionServer(t, 404, group != "")
 		client, err := NewClient(Options{Kubeconfig: kubeconfig(t, server.URL), Name: "prod", APIGroup: group, RequestTimeout: time.Second})
 		if err != nil {
 			t.Fatal(err)

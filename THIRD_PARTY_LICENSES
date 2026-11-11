@@ -308,7 +308,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-github.com/kubebao/openbao-operator-client v0.1.0
+github.com/kubebao/openbao-operator-client v0.1.1-0.20261111230941-969f1d6f104e
 License: Apache-2.0
 
                                  Apache License

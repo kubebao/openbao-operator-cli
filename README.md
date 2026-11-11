@@ -2,8 +2,8 @@
 
 Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
 
-The CLI reports operator-published cluster status, diagnoses captured observations, and creates local support bundles
-for offline analysis. Operator controls are planned and are not implemented.
+The CLI reports operator-published cluster status, diagnoses captured observations, creates local support bundles,
+and submits guarded pause, resume, and maintenance controls.
 
 ## Build and run
 
@@ -60,12 +60,24 @@ Bundles contain approved evidence, collection results, findings, and a readable 
 permissions and bounds as `doctor`. Logs are not collected. Review names and approved metadata before sharing a bundle.
 See [support bundles](docs/support-bundles.md) for the format, limits, partial results, and offline behavior.
 
+## Cluster controls
+
+```sh
+./bin/kubebao pause prod -n security
+./bin/kubebao resume prod -n security --wait
+./bin/kubebao maintenance enable prod -n security --wait
+./bin/kubebao maintenance disable prod -n security --dry-run
+```
+
+Controls submit one field-scoped JSON Patch guarded by UID, resource version, and generation. API acceptance and later
+operator observation are separate results. Maintenance never resumes reconciliation. See [controls](docs/controls.md)
+for dry-run, observation, permissions, and unresolved submission outcomes.
+
 ## Planned scope
 
 - Extend status with related-resource evidence and qualification against operator releases.
 - Extend diagnostic evidence to tenants, Jobs, Events, and networking resources.
 - Add bounded, optional log collection to support bundles.
-- Guarded pause, resume, and maintenance controls through the operator's public API.
 
 The operator retains responsibility for reconciliation and lifecycle safety. General OpenBao administration continues
 through `bao`. See [architecture and scope](docs/architecture.md) and the [roadmap](docs/roadmap.md).

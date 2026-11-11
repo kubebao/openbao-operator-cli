@@ -23,6 +23,8 @@ func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
 			t.Errorf("unexpected mutation: %s", r.Method)
 		}
 		switch r.URL.Path {
+		case "/apis/kubebao.org/v1alpha1":
+			http.NotFound(w, r)
 		case "/apis/openbao.org/v1alpha1":
 			_, _ = fmt.Fprint(w, `{"apiVersion":"v1","kind":"APIResourceList","groupVersion":"openbao.org/v1alpha1","resources":[
 			{"name":"openbaoclusters","kind":"OpenBaoCluster","namespaced":true}]}`)

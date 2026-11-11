@@ -2,10 +2,10 @@
 
 ## Current implementation
 
-The Go executable provides cluster status, workload and recovery diagnosis, help, version output, build metadata, local
-archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the caller's kubeconfig and
-projects public v1alpha1 fields into a typed observation. It supports the qualified `openbao.org` API group, explicit
-group selection, and UID-pinned polling in watch mode.
+The Go executable provides cluster status, workload and recovery diagnosis, support bundles, offline diagnosis,
+guarded controls, local archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the
+caller's kubeconfig and projects public v1alpha1 fields into a typed observation. Separate source-bound contracts support `kubebao.org` and
+`openbao.org`, unambiguous API discovery, explicit selection, and UID-pinned polling.
 
 The first status implementation does not collect related workloads or restore requests. It reports the restore-hold
 annotation and legacy cluster restore fields, with their limits identified. Maintenance annotation propagation and current
@@ -14,17 +14,16 @@ annotation and legacy cluster restore fields, with their limits identified. Main
 `doctor` adds bounded collection of associated StatefulSets, Pods, and restore requests. Pure rules explain readiness and
 recovery restrictions from that captured evidence. It does not change cluster state or collect logs. See [diagnosis](doctor.md).
 
-## Planned first release
+## Scope
 
 `kubebao` connects to Kubernetes through the caller's kubeconfig. It requires neither the console nor a backend service.
 The operator retains responsibility for reconciliation and lifecycle safety.
 
-The proposed first release includes status and progress reporting, evidence-backed diagnosis, local support bundles,
-offline diagnosis, pause and resume, and maintenance enable and disable controls. Backup execution, upgrades, restores,
-restarts, scaling, installation, and automatic repair remain outside that release's scope. General OpenBao administration
-continues through `bao`.
+The command set includes status, diagnosis, local support bundles, offline diagnosis, pause and resume, and maintenance
+enable and disable. Backup execution, upgrades, restores, restarts, scaling, installation, and automatic repair remain
+outside its scope. General OpenBao administration continues through `bao`.
 
-The implementation will separate:
+The implementation separates:
 
 - Kubernetes discovery, resource association, and collection.
 - Version-specific adapters into normalized, sanitized observations.
@@ -38,7 +37,8 @@ UID associations, and pure diagnostic rules. `internal/collect` configures the c
 command scopes, and maps shared facts to CLI presentation. `internal/evidence` holds display models and the typed
 normalized capture; `internal/doctor` selects policy and maps shared findings. Neither package imports Kubernetes clients.
 `internal/status` and doctor render text. Command wrappers own JSON process envelopes, thresholds, and exit codes.
-The CLI owns bounded bundle archives and offline replay. Lifecycle controls remain unimplemented.
+The CLI owns bounded bundle archives and offline replay. `internal/control` orchestrates shared guarded submission and
+pure assessments. It owns bounded waits; collection remains read-only.
 
 ## Evidence and bundles
 
@@ -74,7 +74,7 @@ bounded timeouts. A timeout after submission does not prove that the change fail
 Compatibility is declared per operator release and capability. API discovery alone does not establish a qualified
 contract. See [shared client integration](client-migration.md) for recorded qualification boundaries.
 
-## Planned command results
+## Command results
 
 Help and version use `0` for completion and `1` for invalid input or execution failure. Status also uses `3` when collection
 is incomplete. Doctor uses:

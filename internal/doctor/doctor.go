@@ -54,7 +54,10 @@ type Report struct {
 func Policy(at time.Time) diagnose.Policy {
 	p := diagnose.DefaultPolicy(
 		at,
-		[]string{string(adapter.V1Alpha1Snapshot), string(adapter.KubernetesAppsV1), string(adapter.KubernetesCoreV1)},
+		[]string{
+			string(adapter.V1Alpha1Snapshot), string(adapter.KubeBaoV1Alpha1Snapshot),
+			string(adapter.KubernetesAppsV1), string(adapter.KubernetesCoreV1),
+		},
 	)
 	p.Rules = []diagnose.RuleID{
 		diagnose.RuleGeneration,
@@ -70,7 +73,7 @@ func Policy(at time.Time) diagnose.Policy {
 		diagnose.RuleRestriction,
 		diagnose.RuleRestore,
 	}
-	p.RestoreUIDBindingContracts = []string{string(adapter.V1Alpha1Snapshot)}
+	p.RestoreUIDBindingContracts = []string{string(adapter.V1Alpha1Snapshot), string(adapter.KubeBaoV1Alpha1Snapshot)}
 	p.ReportHistoricalRestores = false
 	p.MaxSubjects = 3001
 	return p

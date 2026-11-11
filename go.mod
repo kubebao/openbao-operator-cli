@@ -3,7 +3,7 @@ module github.com/kubebao/openbao-operator-cli
 go 1.27.4
 
 require (
-	github.com/kubebao/openbao-operator-client v0.1.0
+	github.com/kubebao/openbao-operator-client v0.1.1-0.20261111230941-969f1d6f104e
 	github.com/spf13/cobra v1.10.2
 	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v0.37.2

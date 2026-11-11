@@ -29,6 +29,9 @@ findings.json
 evidence/capture.json
 ```
 
+The current evidence schema is `4`. Older evidence schema versions are rejected; recollect them with the current
+client. Bundle format `v1` and command JSON `v1` remain separate from the evidence schema.
+
 - `manifest.json` records the format and evidence schema versions, CLI build, selected target, collection interval,
   collection result and steps, requested timeout, log option, and diagnostic policy. The policy contains the selected
   rule IDs, rule-set version, projection contracts, thresholds, and analysis reference time.

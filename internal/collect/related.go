@@ -22,7 +22,7 @@ func (c *Client) CollectDiagnostic(ctx context.Context) evidence.Snapshot {
 	input := &snapshot.NormalizedEvidence.Clusters[0]
 	sets := c.request(adapter.KubernetesAppsV1, "apps", "v1", "statefulsets", shared.ReadList)
 	pods := c.request(adapter.KubernetesCoreV1, "", "v1", "pods", shared.ReadList)
-	restores := c.request(adapter.V1Alpha1Snapshot, apiGroup, "v1alpha1", "openbaorestores", shared.ReadList)
+	restores := c.request(c.contract, c.target.APIGroup, "v1alpha1", "openbaorestores", shared.ReadList)
 	sets.Scope.Selector, pods.Scope.Selector = "openbao.org/cluster="+c.target.Name, "openbao.org/cluster="+c.target.Name
 	limits := sets.Limits
 	limits.MaxPages, limits.MaxCandidates, limits.MaxBytes, limits.MaxRetainedBytes = 64, 3*maxCandidates, 48*1024*1024, 48*1024*1024

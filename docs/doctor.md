@@ -11,7 +11,7 @@ kubebao doctor prod -n security --max-backup-age 48h
 kubebao doctor --bundle prod-support.tar.gz
 ```
 
-The command accepts the [status](status.md) connection options and the approved `openbao.org/v1alpha1` contract.
+The command accepts the [status](status.md) connection options and its source-bound native and legacy contracts.
 It does not mutate resources, collect logs, read Secrets, or contact OpenBao or cloud APIs. Local provider-text
 projection is not implemented. [Support bundles](support-bundles.md) provide offline diagnosis.
 
@@ -28,7 +28,8 @@ The shared client verifies controller references and reserved UID metadata. Name
 Pod membership requires the exact StatefulSet UID and a confirmed parent chain. A proven foreign chain is excluded from
 target findings and population; conflicting or unconfirmed candidates limit coverage. Restore binding requires target
 UID, execution target UID, or a request-UID-bound restore origin. A hold, operation ID, target name, or creation time alone
-does not prove ownership. Native recovery and a migrated API group are unsupported.
+does not prove ownership. Native recovery is unsupported. A migrated object is a separate group and UID; migration
+annotations do not establish cross-group identity or restore association.
 
 Missing, changed, deleted, replaced, or failed final target verification prevents current related-resource findings.
 The original identity remains selected. A status-only resourceVersion change does not invalidate matching positive UID
@@ -111,7 +112,7 @@ normalized evidence and diagnostic references remain available.
 ## Permissions
 
 Doctor needs status's named-cluster GET and discovery access, plus namespace LIST on `apps/v1` StatefulSets, core `v1`
-Pods, and `openbao.org/v1alpha1` restores. It grants no permissions and reads no Pod logs, exec sessions, Secrets,
+Pods, and restores in the selected API group. It grants no permissions and reads no Pod logs, exec sessions, Secrets,
 container arguments, literal environment values, arbitrary annotations, restore source payloads, or authentication
 references. No existing environment is required for the synthetic command tests.
 

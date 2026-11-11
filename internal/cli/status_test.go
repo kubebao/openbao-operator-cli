@@ -199,7 +199,6 @@ func TestStatusRejectsInputBeforeLoadingCredentials(t *testing.T) {
 			"yaml",
 		},
 		{"--api-group", "arbitrary.example"},
-		{"--api-group", "kubebao.org"},
 		{"--request-timeout", "0s"},
 		{"--watch-interval", "0s"},
 	}
@@ -279,7 +278,11 @@ func TestStatusTimeoutIsDistinctFromMissingTarget(t *testing.T) {
 			http.NotFound(w, r)
 		})
 		var stdout, stderr bytes.Buffer
-		args := []string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--request-timeout", "30ms", "-o", "json"}
+		requestTimeout := "5s"
+		if timeout {
+			requestTimeout = "30ms"
+		}
+		args := []string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL), "--request-timeout", requestTimeout, "-o", "json"}
 		code := Execute(context.Background(), args, &stdout, &stderr)
 		var report statusReport
 		if json.Unmarshal(stdout.Bytes(), &report) != nil {

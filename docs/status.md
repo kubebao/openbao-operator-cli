@@ -12,9 +12,11 @@ kubebao status prod --watch --watch-interval 2s
 
 Kubeconfig loading, context and namespace selection, credential plugins, rendering, and process results belong to the
 CLI. The shared client owns projections, bounded reads, generation acknowledgement, and diagnostic interpretation.
-The supported projection contract is `openbao.org/v1alpha1@9671c306`. API discovery does not qualify an operator release.
-`--api-group openbao.org` selects that group. Other groups, including `kubebao.org`, are rejected before credentials load;
-the earlier scaffold's assumption that both groups share a schema is removed.
+The supported source contracts are `kubebao.org/v1alpha1@22894cdc/maintenance-pools-v1` and
+`openbao.org/v1alpha1@9671c306/maintenance-pools-v1`. API discovery does not qualify an operator release. Automatic
+selection discovers both declared APIs and selects only an unambiguous served cluster API. If both APIs are served,
+use `--api-group kubebao.org` or `--api-group openbao.org`. Explicit selection queries only that discovery endpoint.
+Denied, malformed, or failed discovery remains incomplete and does not select another group.
 
 ## Evidence
 
@@ -48,7 +50,7 @@ enter output.
 ## JSON and process results
 
 The command envelope retains `schemaVersion: "v1"`, `resultCode`, `exitCode`, collection times, `target`, `observation`,
-and `collection`. It adds `normalizedEvidence`, a shared evidence-schema-2 capture containing approved typed facts and
+and `collection`. It adds `normalizedEvidence`, a shared evidence-schema-4 capture containing approved typed facts and
 actual collection outcomes. Display projections are mappings; diagnostic rules do not reinterpret them. Process exit
 codes exist only in command envelopes, outside normalized evidence and pure analysis.
 
@@ -58,7 +60,7 @@ map to normalized `denied`. Missing targets and unavailable APIs remain distinct
 the shared library's outcome names and retain scope and interval details.
 
 - `0`: collection completed, including unhealthy or uncertain operator state.
-- `1`: invalid input, configuration or output failure, missing target, or unsupported API-group selection.
+- `1`: invalid input, configuration or output failure, missing target, ambiguous discovery, or unsupported API-group selection.
 - `3`: collection is incomplete, the selected UID disappeared or changed, or a resource cannot be projected.
 
 Reports go to standard output. A nonzero result also writes a short result message to standard error. Input and
@@ -66,8 +68,9 @@ kubeconfig failures produce no status report. Version output has a separate JSON
 
 ## Permissions
 
-Status requires named-resource `get` on `openbaoclusters.openbao.org` in the selected namespace and access to
-`/apis/openbao.org/v1alpha1`. It requires no `list`, `watch`, Pod log or exec, Secret access, roles, port forwarding,
+Status requires named-resource `get` on `openbaoclusters` in the selected API group and namespace, plus access to its
+`/apis/<group>/v1alpha1` endpoint. Automatic selection queries both declared discovery endpoints. It requires no
+`list`, `watch`, Pod log or exec, Secret access, roles, port forwarding,
 or OpenBao/cloud API access. Watch mode uses the same permissions as one read.
 
 When normalized input fails validation, JSON includes an optional `validationPath`, and text identifies that field.
