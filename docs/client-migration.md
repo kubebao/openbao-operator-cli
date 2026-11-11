@@ -1,8 +1,7 @@
-# Shared client migration qualification
+# Shared client integration
 
-The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.0.0-20261111134438-0e0f536c49b4`, client commit
-`0e0f536c49b4a94c89411b00693aa27672f624b6`. Client PR #19 merges the contract fixes; this remains an untagged milestone 6 candidate.
-Milestone 5 qualified client `74412f30a4c0430092dfd603de15435260e7e86e`. The current candidate includes the pre-release corrections below.
+The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.1.0`, client commit
+`1ab29173f8b94b9607058b7ccc04e98f35f59224`. Current qualification evidence is recorded in the client release notes.
 The library uses evidence schema 2 and rule-set version 8. The CLI keeps
 command schema `v1` through presentation mappings. No local replacement or workspace is required for final builds.
 Go 1.27.4 is required.
@@ -51,7 +50,7 @@ make check
 make vulncheck
 make licenses
 make check-licenses
-make dist VERSION=milestone-5
+make dist VERSION=client-v0.1.0-qualified
 ```
 
 Command tests cover text/JSON, thresholds and exit precedence, actual request paths/selectors, permissions, pagination and
@@ -90,9 +89,8 @@ readiness evidence, so the Pod rule remains incomplete and doctor exits three wh
 warnings. This result does not qualify healthy-cluster diagnosis, nonempty restore correlation, lifecycle operations,
 backup/upgrade execution, or another operator version.
 
-Approved JSON reports and summaries remain under ignored `.local/milestone-5`. The disposable cluster is deleted and
-scoped credential files are removed. Existing environments are preserved. Console PR #24 stays private, open, and
-deferred. A common immutable client `v0` tag and both-consumer qualification remain milestone 6.
+The operator results above retain their original executable identity. Later qualification records identify their own
+consumer and client commits in pull requests and release notes. Existing environments remain separate from these tests.
 
 ## Pre-release contract corrections
 
@@ -110,4 +108,4 @@ or invalid source values enter the diagnostic message.
 
 Kubernetes 1.34 is the client qualification floor. Missing current Ready-condition acknowledgement still limits coverage;
 no generation is inferred from omission. The client records a default Kubernetes 1.34.11 field check separately from
-operator integration qualification. Client tagging remains on hold.
+operator integration qualification.
