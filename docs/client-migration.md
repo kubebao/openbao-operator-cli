@@ -1,7 +1,9 @@
 # Shared client migration qualification
 
-The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.0.0-20261111112413-74412f30a4c0`, client commit
-`74412f30a4c0430092dfd603de15435260e7e86e`. The library uses evidence schema 2 and rule-set version 7. The CLI keeps
+The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.0.0-20261111115206-1edeecfd35ae`, client commit
+`1edeecfd35aedcfa88af9fc57bf1d60dca765c3c`. This is the common milestone 6 candidate, not a release tag.
+Milestone 5 qualified client `74412f30a4c0430092dfd603de15435260e7e86e`; the new candidate changes only client documentation.
+The library uses evidence schema 2 and rule-set version 7. The CLI keeps
 command schema `v1` through presentation mappings. No local replacement or workspace is required for final builds.
 Go 1.27.4 is required.
 

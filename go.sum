@@ -48,8 +48,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
-github.com/kubebao/openbao-operator-client v0.0.0-20261111112413-74412f30a4c0 h1:v7vaTyNjDTxw0C9wMHL6tOXea0ZPdeCbGHcCfzTlQ4I=
-github.com/kubebao/openbao-operator-client v0.0.0-20261111112413-74412f30a4c0/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
+github.com/kubebao/openbao-operator-client v0.0.0-20261111115206-1edeecfd35ae h1:RD1ZVzRI+KayWBSLJNIxFMpC7U8+NNQp7XSWaJLBuqU=
+github.com/kubebao/openbao-operator-client v0.0.0-20261111115206-1edeecfd35ae/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
