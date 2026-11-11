@@ -9,12 +9,14 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 	"github.com/kubebao/openbao-operator-cli/internal/status"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
 // Process results belong to command envelopes, not normalized evidence or pure analysis.
 type statusReport struct {
 	evidence.Snapshot
-	ExitCode int `json:"exitCode"`
+	ExitCode       int    `json:"exitCode"`
+	ValidationPath string `json:"validationPath,omitempty"`
 }
 type diagnosticReport struct {
 	doctor.Report
@@ -58,7 +60,7 @@ func diagnosticResult(snapshot evidence.Snapshot, threshold string) diagnosticRe
 		ExitCode: collectionExitCode(
 			snapshot.ResultCode,
 		),
-		Evidence: statusReport{Snapshot: snapshot, ExitCode: collectionExitCode(snapshot.ResultCode)},
+		Evidence: statusReport{Snapshot: analyzed.Evidence, ExitCode: collectionExitCode(snapshot.ResultCode)},
 	}
 	if report.ExitCode != 0 {
 		return report
@@ -87,7 +89,15 @@ func writeStatus(writer io.Writer, report statusReport, output string, verbose b
 	if output == "json" {
 		return writeJSON(writer, report)
 	}
-	return status.WriteText(writer, report.Snapshot, verbose, report.ExitCode == 3)
+	if err := status.WriteText(writer, report.Snapshot, verbose, report.ExitCode == 3); err != nil {
+		return err
+	}
+	if report.ValidationPath != "" {
+		if _, err := fmt.Fprintf(writer, "Validation field: %s\n", report.ValidationPath); err != nil {
+			return fmt.Errorf("write validation field: %w", err)
+		}
+	}
+	return nil
 }
 
 func writeDiagnostic(writer io.Writer, report diagnosticReport, output string, verbose bool) error {
@@ -98,13 +108,19 @@ func writeDiagnostic(writer io.Writer, report diagnosticReport, output string, v
 }
 
 func makeStatusReport(snapshot evidence.Snapshot) statusReport {
+	path := ""
 	if snapshot.Observation != nil {
 		attention, err := doctor.StatusAttention(snapshot)
 		if err != nil {
 			snapshot.ResultCode = "invalid_resource"
+			snapshot.NormalizedEvidence = nil
+			var invalid *shared.ValidationError
+			if errors.As(err, &invalid) {
+				path = invalid.Path
+			}
 		} else {
 			snapshot.Observation.Attention = attention
 		}
 	}
-	return statusReport{Snapshot: snapshot, ExitCode: collectionExitCode(snapshot.ResultCode)}
+	return statusReport{Snapshot: snapshot, ExitCode: collectionExitCode(snapshot.ResultCode), ValidationPath: path}
 }

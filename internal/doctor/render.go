@@ -18,6 +18,9 @@ func WriteText(writer io.Writer, report Report, resultCode string, verbose bool)
 		resultCode,
 		report.RuleSetVersion,
 	)
+	if report.ValidationPath != "" {
+		fmt.Fprintf(&buffer, "Validation field: %s\n", report.ValidationPath)
+	}
 	for _, finding := range report.Findings {
 		fmt.Fprintf(&buffer, "\n[%s] %s: %s\n  %s\n", finding.Severity, finding.RuleID, finding.Summary, finding.Description)
 		for _, check := range finding.SuggestedChecks {

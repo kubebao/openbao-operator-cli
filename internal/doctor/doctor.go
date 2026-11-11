@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
@@ -39,6 +40,7 @@ type RuleCoverage struct {
 	MissingEvidence []string `json:"missingEvidence"`
 }
 type Report struct {
+	ValidationPath string            `json:"validationPath,omitempty"`
 	SchemaVersion  string            `json:"schemaVersion"`
 	RuleSetVersion string            `json:"ruleSetVersion"`
 	AnalysisTime   time.Time         `json:"analysisTime"`
@@ -101,6 +103,13 @@ func Analyze(snapshot evidence.Snapshot, policy diagnose.Policy) (Report, error)
 	}
 	result, err := diagnose.Analyze(*snapshot.NormalizedEvidence, policy)
 	if err != nil {
+		// Rejected captures have not passed validation and must not enter output.
+		report.Evidence.NormalizedEvidence = nil
+		var invalid *shared.ValidationError
+		if errors.As(err, &invalid) {
+			report.ValidationPath = invalid.Path
+			return report, fmt.Errorf("normalized evidence cannot be evaluated: %w", err)
+		}
 		return report, errors.New("normalized evidence cannot be evaluated")
 	}
 	report.Complete = true
@@ -111,7 +120,12 @@ func Analyze(snapshot evidence.Snapshot, policy diagnose.Policy) (Report, error)
 		if c.State == diagnose.Insufficient {
 			report.Complete = false
 			state = "insufficient_evidence"
-			limits = append(limits, string(c.Reason))
+			for _, reason := range c.Reasons {
+				limits = append(limits, string(reason))
+			}
+			if len(limits) == 0 {
+				limits = append(limits, string(c.Reason))
+			}
 			missing[c.Rule] = limits
 		}
 		if c.State == diagnose.NotRequested {

@@ -1,9 +1,9 @@
 # Shared client migration qualification
 
-The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.0.0-20261111115206-1edeecfd35ae`, client commit
-`1edeecfd35aedcfa88af9fc57bf1d60dca765c3c`. This is the common milestone 6 candidate, not a release tag.
-Milestone 5 qualified client `74412f30a4c0430092dfd603de15435260e7e86e`; the new candidate changes only client documentation.
-The library uses evidence schema 2 and rule-set version 7. The CLI keeps
+The CLI pins `github.com/kubebao/openbao-operator-client` at `v0.0.0-20261111134438-0e0f536c49b4`, client commit
+`0e0f536c49b4a94c89411b00693aa27672f624b6`. Client PR #19 merges the contract fixes; this remains an untagged milestone 6 candidate.
+Milestone 5 qualified client `74412f30a4c0430092dfd603de15435260e7e86e`. The current candidate includes the pre-release corrections below.
+The library uses evidence schema 2 and rule-set version 8. The CLI keeps
 command schema `v1` through presentation mappings. No local replacement or workspace is required for final builds.
 Go 1.27.4 is required.
 
@@ -93,3 +93,21 @@ backup/upgrade execution, or another operator version.
 Approved JSON reports and summaries remain under ignored `.local/milestone-5`. The disposable cluster is deleted and
 scoped credential files are removed. Existing environments are preserved. Console PR #24 stays private, open, and
 deferred. A common immutable client `v0` tag and both-consumer qualification remain milestone 6.
+
+## Pre-release contract corrections
+
+Exactly one valid Job controller excludes a Pod from StatefulSet membership. Completed backup Pods do not limit the Pod
+rule or satisfy its population count. Missing or multiple controllers, and controller kinds that conflict with a known
+StatefulSet UID, remain incomplete evidence. This exclusion does not prove ownership by a different cluster.
+
+Completed reads remain complete when an association is unconfirmed. Doctor still returns exit 3 for incomplete rule
+coverage, including when `--fail-on none` is selected. JSON preserves the completed collection result separately from
+the incomplete diagnostic result. Coverage and finding limits retain all shared insufficiency causes.
+
+Malformed normalized input adds `validationPath` to command JSON and a validation-field line to text output. The field
+contains only library-owned names and indices. A rejected normalized capture is omitted from output. No provider errors
+or invalid source values enter the diagnostic message.
+
+Kubernetes 1.34 is the client qualification floor. Missing current Ready-condition acknowledgement still limits coverage;
+no generation is inferred from omission. The client records a default Kubernetes 1.34.11 field check separately from
+operator integration qualification. Client tagging remains on hold.

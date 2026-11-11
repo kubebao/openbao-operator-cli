@@ -94,3 +94,14 @@ Doctor needs status's named-cluster GET and discovery access, plus namespace LIS
 Pods, and `openbao.org/v1alpha1` restores. It grants no permissions and reads no Pod logs, exec sessions, Secrets,
 container arguments, literal environment values, arbitrary annotations, restore source payloads, or authentication
 references. No existing environment is required for the synthetic command tests.
+
+## Validation and collection boundaries
+
+A valid single non-StatefulSet controller reference excludes backup Job Pods from StatefulSet findings and population.
+A contradictory known StatefulSet UID still limits coverage. Completed reads remain complete when associations are
+unconfirmed; diagnostic completeness and exit-code precedence remain separate. Coverage retains every observed shared
+insufficiency cause.
+
+When normalized input fails validation, JSON includes an optional `validationPath`, and text identifies that field.
+Rejected normalized captures are omitted. The field path contains no source values or provider errors. Kubernetes 1.34
+and later are the qualification target; absent Ready-condition acknowledgement still prevents complete Pod evaluation.

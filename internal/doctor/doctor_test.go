@@ -1,8 +1,10 @@
 package doctor
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +14,48 @@ import (
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
+
+func TestValidationFieldIsReportedWithoutRejectedEvidence(t *testing.T) {
+	snapshot := captureFixture(t)
+	canary := "PRIVATE_CANARY"
+	snapshot.NormalizedEvidence.Clusters[0].Pods.Observations[0].Metadata.Reference.ResourceVersion = shared.Text{
+		State: shared.ValueInvalid, Value: &canary,
+	}
+	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	want := "clusters[0].pods.observations[0].metadata.reference.resourceVersion"
+	if err == nil || report.ValidationPath != want || strings.Contains(err.Error(), "CANARY") || report.Evidence.NormalizedEvidence != nil {
+		t.Fatal("invalid capture lost its safe path or retained rejected evidence")
+	}
+	data, marshalErr := json.Marshal(report)
+	var text bytes.Buffer
+	if marshalErr != nil || WriteText(&text, report, "incomplete", false) != nil ||
+		!strings.Contains(text.String(), want) || strings.Contains(string(data), "CANARY") {
+		t.Fatal("validation output omitted the field path or exposed rejected values")
+	}
+}
+
+func TestAllSharedCoverageCausesReachCLIReports(t *testing.T) {
+	snapshot := captureFixture(t)
+	input := &snapshot.NormalizedEvidence.Clusters[0]
+	input.Pods.Collection.Outcome = shared.CollectionPartial
+	for index := range input.Pods.Observations[0].Conditions.Values {
+		input.Pods.Observations[0].Conditions.Values[index].ObservedGeneration = shared.Integer{State: shared.ValueUnknown}
+	}
+	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, coverage := range report.Coverage {
+		if coverage.RuleID == string(diagnose.RulePod) {
+			if !slices.Contains(coverage.MissingEvidence, string(diagnose.ReasonGeneration)) ||
+				!slices.Contains(coverage.MissingEvidence, string(diagnose.ReasonScopeIncomplete)) {
+				t.Fatal("shared coverage causes were lost in the CLI mapping")
+			}
+			return
+		}
+	}
+	t.Fatal("Pod rule coverage was omitted")
+}
 
 func captureFixture(t *testing.T) evidence.Snapshot {
 	t.Helper()

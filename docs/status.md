@@ -69,3 +69,7 @@ kubeconfig failures produce no status report. Version output has a separate JSON
 Status requires named-resource `get` on `openbaoclusters.openbao.org` in the selected namespace and access to
 `/apis/openbao.org/v1alpha1`. It requires no `list`, `watch`, Pod log or exec, Secret access, roles, port forwarding,
 or OpenBao/cloud API access. Watch mode uses the same permissions as one read.
+
+When normalized input fails validation, JSON includes an optional `validationPath`, and text identifies that field.
+The rejected normalized capture is omitted. Source values and provider errors are not included in the validation message.
+HTTP 410 and 429 remain distinct shared `expired` and `rate_limited` outcomes; they produce incomplete status results.

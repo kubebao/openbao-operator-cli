@@ -197,7 +197,7 @@ func TestLabelsAndNamesDoNotProveAssociation(t *testing.T) {
 		t,
 		relatedScenario{pods: []unstructured.Unstructured{orphan}, restores: []unstructured.Unstructured{request}},
 	)
-	if snapshot.ResultCode == "completed" || len(snapshot.Related.Pods) != 0 || len(snapshot.Related.Restores) != 0 ||
+	if snapshot.ResultCode != "completed" || len(snapshot.Related.Pods) != 0 || len(snapshot.Related.Restores) != 0 ||
 		len(snapshot.Related.Omissions) != 2 {
 		t.Fatalf("unverified ownership became associated evidence: %+v", snapshot)
 	}
@@ -244,7 +244,7 @@ func TestConflictingRestoreIdentitiesAreNotAssociated(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := collectScenario(t, relatedScenario{restores: []unstructured.Unstructured{request}})
-	if snapshot.ResultCode == "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
+	if snapshot.ResultCode != "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
 		t.Fatalf("conflicting target evidence was accepted: %+v", snapshot)
 	}
 }
@@ -256,7 +256,7 @@ func TestLegacyCompletedRestoreRemainsUnassociated(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := collectScenario(t, relatedScenario{restores: []unstructured.Unstructured{request}})
-	if snapshot.ResultCode == "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
+	if snapshot.ResultCode != "completed" || len(snapshot.Related.Restores) != 0 || len(snapshot.Related.Omissions) != 1 {
 		t.Fatalf("legacy name-only association was accepted: %+v", snapshot)
 	}
 }
