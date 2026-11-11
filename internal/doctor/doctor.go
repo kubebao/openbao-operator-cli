@@ -57,7 +57,14 @@ func Policy(at time.Time) diagnose.Policy {
 		[]string{string(adapter.V1Alpha1Snapshot), string(adapter.KubernetesAppsV1), string(adapter.KubernetesCoreV1)},
 	)
 	p.Rules = []diagnose.RuleID{
+		diagnose.RuleGeneration,
 		diagnose.RuleAvailability,
+		diagnose.RuleSealed,
+		diagnose.RuleCondition,
+		diagnose.RuleController,
+		diagnose.RuleBackupFailed,
+		diagnose.RuleBackupAbsent,
+		diagnose.RuleUpgrade,
 		diagnose.RuleWorkload,
 		diagnose.RulePod,
 		diagnose.RuleRestriction,
@@ -66,6 +73,15 @@ func Policy(at time.Time) diagnose.Policy {
 	p.RestoreUIDBindingContracts = []string{string(adapter.V1Alpha1Snapshot)}
 	p.ReportHistoricalRestores = false
 	p.MaxSubjects = 3001
+	return p
+}
+
+// WithBackupAge selects age evaluation only for a caller-declared positive limit.
+func WithBackupAge(p diagnose.Policy, limit time.Duration) diagnose.Policy {
+	if limit > 0 {
+		p.MaxBackupAge = limit
+		p.Rules = append(p.Rules, diagnose.RuleBackupAge)
+	}
 	return p
 }
 
@@ -194,6 +210,10 @@ func suggestedCheck(rule diagnose.RuleID) string {
 		return "Inspect the UID-confirmed restore and any matching hold; do not replay an ambiguous submission."
 	case diagnose.RuleRestriction:
 		return "Inspect independent pause, maintenance, restore-hold, and break-glass controls."
+	case diagnose.RuleBackupFailed, diagnose.RuleBackupAbsent, diagnose.RuleBackupAge:
+		return "Inspect recorded backup results and the declared backup policy; configuration does not verify provider access."
+	case diagnose.RuleUpgrade:
+		return "Inspect the recorded upgrade failure and current operator progress before taking action."
 	default:
 		return "Inspect the referenced public operator fields."
 	}

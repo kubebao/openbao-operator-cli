@@ -2,8 +2,8 @@
 
 Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
 
-The CLI reports operator-published cluster status and diagnoses workload readiness and recovery restrictions.
-Support bundles and operator controls are planned and are not implemented.
+The CLI reports operator-published cluster status, diagnoses captured observations, and creates local support bundles
+for offline analysis. Operator controls are planned and are not implemented.
 
 ## Build and run
 
@@ -42,21 +42,33 @@ interpretation limits.
 ./bin/kubebao doctor prod -n security
 ./bin/kubebao doctor prod -n security --output json
 ./bin/kubebao doctor prod -n security --fail-on error
+./bin/kubebao doctor prod -n security --max-backup-age 48h
 ```
 
 `doctor` adds bounded, ownership-aware StatefulSet, Pod, and restore collection. It reports findings with stable rule
 identifiers, resource and field references, suggested checks, and missing evidence. Rules consume captured observations
 without making network requests. See [diagnosis](docs/doctor.md) for permissions, initial rule coverage, and exit codes.
 
+## Support bundles and offline diagnosis
+
+```sh
+./bin/kubebao support-bundle prod -n security --output-file prod-support.tar.gz
+./bin/kubebao doctor --bundle prod-support.tar.gz
+```
+
+Bundles contain approved evidence, collection results, findings, and a readable summary. Collection uses the same
+permissions and bounds as `doctor`. Logs are not collected. Review names and approved metadata before sharing a bundle.
+See [support bundles](docs/support-bundles.md) for the format, limits, partial results, and offline behavior.
+
 ## Planned scope
 
 - Extend status with related-resource evidence and qualification against operator releases.
-- Extend diagnostic coverage to tenants, backup and upgrade failures, and integration conditions.
-- Local support bundles and offline diagnosis from the captured evidence.
+- Extend diagnostic evidence to tenants, Jobs, Events, and networking resources.
+- Add bounded, optional log collection to support bundles.
 - Guarded pause, resume, and maintenance controls through the operator's public API.
 
 The operator retains responsibility for reconciliation and lifecycle safety. General OpenBao administration continues
-through `bao`. See [architecture and scope](docs/architecture.md) for the intended boundaries.
+through `bao`. See [architecture and scope](docs/architecture.md) and the [roadmap](docs/roadmap.md).
 
 ## Development
 

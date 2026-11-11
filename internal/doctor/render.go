@@ -56,7 +56,7 @@ func WriteText(writer io.Writer, report Report, resultCode string, verbose bool)
 		}
 	}
 	buffer.WriteString(
-		"\nDiagnosis describes captured evidence, not independent OpenBao health probes. No operator release is qualified.\n",
+		"\nDiagnosis describes captured evidence, not independent OpenBao health probes.\n",
 	)
 	if _, err := io.WriteString(writer, buffer.String()); err != nil {
 		return fmt.Errorf("write diagnosis: %w", err)

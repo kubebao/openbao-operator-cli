@@ -1,4 +1,4 @@
-# Diagnose workload and recovery observations
+# Diagnose operator and workload observations
 
 `kubebao doctor` collects Kubernetes evidence and maps shared diagnostic results into CLI findings.
 
@@ -7,11 +7,13 @@ kubebao doctor prod -n security
 kubebao doctor prod -n security --verbose
 kubebao doctor prod -n security --output json
 kubebao doctor prod -n security --fail-on error
+kubebao doctor prod -n security --max-backup-age 48h
+kubebao doctor --bundle prod-support.tar.gz
 ```
 
 The command accepts the [status](status.md) connection options and the approved `openbao.org/v1alpha1` contract.
-It does not mutate resources, collect logs, read Secrets, or contact OpenBao or cloud APIs. Bundle commands and local
-provider-text projection are not implemented.
+It does not mutate resources, collect logs, read Secrets, or contact OpenBao or cloud APIs. Local provider-text
+projection is not implemented. [Support bundles](support-bundles.md) provide offline diagnosis.
 
 ## Reads and association
 
@@ -45,6 +47,14 @@ The rule-set version comes from the pinned library and is independent of command
 | Rule | Selected interpretation |
 | --- | --- |
 | `KBAO-CLUSTER-001` | Current resource and Available-condition acknowledgement |
+| `KBAO-CLUSTER-002` | Current-generation sealed-state observation |
+| `KBAO-GENERATION-001` | Stale or inconsistent operator generation acknowledgement |
+| `KBAO-CONDITION-001` | Recognized adverse operator conditions, including integration conditions |
+| `KBAO-CONTROLLER-001` | Recorded workload or administrative controller errors |
+| `KBAO-BACKUP-001` | Recorded consecutive backup failures |
+| `KBAO-BACKUP-002` | Configured backups with no recorded successful completion |
+| `KBAO-BACKUP-003` | Backup age exceeds `--max-backup-age`; excluded when the option is omitted |
+| `KBAO-UPGRADE-001` | Recorded rolling-upgrade failure |
 | `KBAO-WORKLOAD-001` | UID-associated StatefulSet readiness and its generation |
 | `KBAO-POD-001` | UID-associated Pod phase, condition acknowledgement, readiness, and population |
 | `KBAO-RESTRICTION-001` | Positively reported pause, maintenance, restore holds, and active break glass |
@@ -61,8 +71,13 @@ analysis is inapplicable. Pod condition acknowledgement is independent of cluste
 
 Coverage is `evaluated`, `not_applicable`, or `insufficient_evidence` for the selected rules. The policy receives the
 capture completion time as its analysis reference. Missing evidence can prevent complete evaluation while independent
-confirmed findings remain visible. The selected rules do not validate tenant provisioning, backup/upgrade Jobs, TLS,
-networking, storage health, Events, maintenance propagation, OpenBao transactions, or quorum safety.
+confirmed findings remain visible. Integration-condition findings describe operator observations. The selected rules do
+not independently validate tenant provisioning, backup/upgrade Jobs, TLS, networking, storage health, Events,
+maintenance propagation, OpenBao transactions, or quorum safety.
+
+Backup-age evaluation requires a positive duration such as `--max-backup-age 48h`. The CLI does not select the age rule
+when this option is omitted. The policy still records the shared library's unused default duration in that case.
+Configuration does not prove that backup storage or provider permissions work. Missing failure counters remain unknown.
 
 ## Output and process results
 
@@ -87,6 +102,11 @@ finding-based failure while retaining collection and evaluation failures.
 
 Incomplete diagnosis takes precedence over findings. Reports go to standard output; nonzero process results also write
 a short message to standard error. Resource names and approved operational metadata remain in the evidence.
+
+Offline results add `source: "bundle"` and retain the captured interval and analysis reference time. Live results use
+`source: "live"`. Offline analysis uses the recorded policy and rejects Kubernetes options and `--max-backup-age`.
+`--fail-on` and output options remain available. Legacy live display projections are absent from offline reports;
+normalized evidence and diagnostic references remain available.
 
 ## Permissions
 

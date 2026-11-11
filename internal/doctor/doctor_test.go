@@ -82,7 +82,14 @@ func captureFixture(t *testing.T) evidence.Snapshot {
   },
   "status": {
     "observedGeneration": 1,
+    "workload": {},
+    "adminOps": {},
     "conditions": [
+      {
+        "type": "OpenBaoSealed",
+        "status": "False",
+        "observedGeneration": 1
+      },
       {
         "type": "Available",
         "status": "True",
@@ -280,5 +287,61 @@ func TestOnlyNormalizedEvidenceDrivesAnalysis(t *testing.T) {
 	snapshot.NormalizedEvidence.SchemaVersion = "unsupported"
 	if _, err := Analyze(snapshot, Policy(snapshot.CompletedAt)); err == nil {
 		t.Fatal("invalid normalized evidence was accepted")
+	}
+}
+
+func TestBackupAgeRequiresDeclaredThreshold(t *testing.T) {
+	snapshot := captureFixture(t)
+	backup := &snapshot.NormalizedEvidence.Clusters[0].Observation.Backup
+	zero := int64(0)
+	last := snapshot.StartedAt.Add(-4 * time.Hour)
+	backup.Configuration, backup.State = shared.ObjectReported, shared.ObjectReported
+	backup.ConsecutiveFailures = shared.Integer{State: shared.ValueReported, Value: &zero}
+	backup.LastSuccessAt = shared.Timestamp{State: shared.ValueReported, Value: &last}
+	for _, tc := range []struct {
+		limit time.Duration
+		want  bool
+	}{{0, false}, {3 * time.Hour, true}, {5 * time.Hour, false}} {
+		policy := WithBackupAge(Policy(snapshot.CompletedAt), tc.limit)
+		report, err := Analyze(snapshot, policy)
+		if err != nil || !report.Complete {
+			t.Fatalf("backup policy analysis incomplete: %v", err)
+		}
+		found := false
+		for _, finding := range report.Findings {
+			found = found || finding.RuleID == string(diagnose.RuleBackupAge)
+		}
+		if found != tc.want || slices.Contains(policy.Rules, diagnose.RuleBackupAge) != (tc.limit > 0) {
+			t.Fatal("backup age rule did not follow the caller-declared threshold")
+		}
+	}
+}
+
+func TestExpandedPolicyReportsRecordedOperatorFailures(t *testing.T) {
+	snapshot := captureFixture(t)
+	cluster := snapshot.NormalizedEvidence.Clusters[0].Observation
+	reason := "FixtureFailure"
+	failure := shared.ControllerError{
+		State: shared.ObjectReported, Reason: shared.Text{State: shared.ValueReported, Value: &reason},
+		At: shared.Timestamp{State: shared.ValueUnknown},
+	}
+	cluster.WorkloadError = failure
+	cluster.Upgrade.State, cluster.Upgrade.Failure = shared.ObjectReported, failure
+	cluster.Backup.State, cluster.Backup.Configuration = shared.ObjectReported, shared.ObjectReported
+	failures := int64(2)
+	cluster.Backup.ConsecutiveFailures = shared.Integer{State: shared.ValueReported, Value: &failures}
+	condition := cluster.Conditions.Values[0]
+	condition.Type, condition.Status = "TLSReady", shared.ConditionFalse
+	cluster.Conditions.Values = append(cluster.Conditions.Values, condition)
+	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	if err != nil || !report.Complete {
+		t.Fatalf("expanded policy could not evaluate recorded failures: %v", err)
+	}
+	for _, rule := range []diagnose.RuleID{
+		diagnose.RuleCondition, diagnose.RuleController, diagnose.RuleBackupFailed, diagnose.RuleUpgrade,
+	} {
+		if !slices.ContainsFunc(report.Findings, func(f Finding) bool { return f.RuleID == string(rule) }) {
+			t.Fatalf("recorded failure missing from doctor: %s", rule)
+		}
 	}
 }

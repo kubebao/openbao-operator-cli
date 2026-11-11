@@ -29,8 +29,9 @@ func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
 		case "/apis/openbao.org/v1alpha1/namespaces/context-namespace/openbaoclusters/prod":
 			_, _ = fmt.Fprint(w, `{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoCluster",
 			"metadata":{"name":"prod","namespace":"context-namespace","uid":"cluster","generation":1,"resourceVersion":"10"},
-			"spec":{"replicas":1},"status":{"observedGeneration":1,"conditions":[
-			{"type":"Available","status":"True","observedGeneration":1}]}}`)
+			"spec":{"replicas":1},"status":{"observedGeneration":1,"workload":{},"adminOps":{},"conditions":[
+			{"type":"Available","status":"True","observedGeneration":1},
+			{"type":"OpenBaoSealed","status":"False","observedGeneration":1}]}}`)
 		case "/apis/apps/v1/namespaces/context-namespace/statefulsets":
 			_, _ = fmt.Fprint(w, `{"apiVersion":"apps/v1","kind":"StatefulSetList","metadata":{"resourceVersion":"100"},"items":[
 			{"metadata":{"name":"prod","namespace":"context-namespace","uid":"set","generation":1,

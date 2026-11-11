@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 	"github.com/kubebao/openbao-operator-cli/internal/status"
+	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
@@ -20,6 +22,7 @@ type statusReport struct {
 }
 type diagnosticReport struct {
 	doctor.Report
+	Source           string       `json:"source"`
 	FailureThreshold string       `json:"failureThreshold"`
 	ResultCode       string       `json:"resultCode"`
 	ExitCode         int          `json:"exitCode"`
@@ -51,10 +54,11 @@ func findingFails(severity doctor.Severity, threshold string) bool {
 	return threshold != "none" && rank[string(severity)] >= rank[threshold]
 }
 
-func diagnosticResult(snapshot evidence.Snapshot, threshold string) diagnosticReport {
-	analyzed, err := doctor.Analyze(snapshot, doctor.Policy(snapshot.CompletedAt))
+func diagnosticResultWithPolicy(snapshot evidence.Snapshot, threshold string, policy diagnose.Policy) diagnosticReport {
+	analyzed, err := doctor.Analyze(snapshot, policy)
 	report := diagnosticReport{
 		Report:           analyzed,
+		Source:           "live",
 		FailureThreshold: threshold,
 		ResultCode:       snapshot.ResultCode,
 		ExitCode: collectionExitCode(
@@ -76,6 +80,10 @@ func diagnosticResult(snapshot evidence.Snapshot, threshold string) diagnosticRe
 		}
 	}
 	return report
+}
+
+func diagnosticPolicy(snapshot evidence.Snapshot, maxBackupAge time.Duration) diagnose.Policy {
+	return doctor.WithBackupAge(doctor.Policy(snapshot.CompletedAt), maxBackupAge)
 }
 
 func writeJSON(writer io.Writer, value any) error {
@@ -103,6 +111,13 @@ func writeStatus(writer io.Writer, report statusReport, output string, verbose b
 func writeDiagnostic(writer io.Writer, report diagnosticReport, output string, verbose bool) error {
 	if output == "json" {
 		return writeJSON(writer, report)
+	}
+	if report.Source == "bundle" {
+		if _, err := fmt.Fprintf(writer, "Offline analysis: captured %s to %s; reference time %s\n",
+			report.Evidence.StartedAt.Format(time.RFC3339Nano), report.Evidence.CompletedAt.Format(time.RFC3339Nano),
+			report.AnalysisTime.Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("write offline analysis times: %w", err)
+		}
 	}
 	return doctor.WriteText(writer, report.Report, report.ResultCode, verbose)
 }

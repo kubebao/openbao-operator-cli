@@ -36,7 +36,7 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 		Short: "Companion CLI for the OpenBao Operator",
 		Long: "kubebao is a companion CLI for the OpenBao Operator.\n\n" +
 			"Read cluster status and diagnose workload or recovery restrictions through Kubernetes.\n" +
-			"Support bundles and operator controls are planned.",
+			"Create local support bundles and diagnose captured evidence offline. Operator controls are planned.",
 		Version:       info.String(),
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
@@ -49,7 +49,7 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.AddCommand(newVersionCommand(info), newStatusCommand(info), newDoctorCommand(info))
+	root.AddCommand(newVersionCommand(info), newStatusCommand(info), newDoctorCommand(info), newBundleCommand(info))
 	return root
 }
 

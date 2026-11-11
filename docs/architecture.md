@@ -4,8 +4,8 @@
 
 The Go executable provides cluster status, workload and recovery diagnosis, help, version output, build metadata, local
 archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the caller's kubeconfig and
-projects public v1alpha1 fields into a typed observation. It supports both known API groups, explicit group selection,
-and UID-pinned polling in watch mode.
+projects public v1alpha1 fields into a typed observation. It supports the qualified `openbao.org` API group, explicit
+group selection, and UID-pinned polling in watch mode.
 
 The first status implementation does not collect related workloads or restore requests. It reports the restore-hold
 annotation and legacy cluster restore fields, with their limits identified. Maintenance annotation propagation and current
@@ -38,7 +38,7 @@ UID associations, and pure diagnostic rules. `internal/collect` configures the c
 command scopes, and maps shared facts to CLI presentation. `internal/evidence` holds display models and the typed
 normalized capture; `internal/doctor` selects policy and maps shared findings. Neither package imports Kubernetes clients.
 `internal/status` and doctor render text. Command wrappers own JSON process envelopes, thresholds, and exit codes.
-Bundle handling and lifecycle controls remain unimplemented.
+The CLI owns bounded bundle archives and offline replay. Lifecycle controls remain unimplemented.
 
 ## Evidence and bundles
 
@@ -72,7 +72,7 @@ concurrency. Report API acceptance, configuration presence, and operator or work
 bounded timeouts. A timeout after submission does not prove that the change failed and does not trigger rollback.
 
 Compatibility is declared per operator release and capability. API discovery alone does not establish a qualified
-contract. No operator release is qualified by this scaffold.
+contract. See [shared client integration](client-migration.md) for recorded qualification boundaries.
 
 ## Planned command results
 
