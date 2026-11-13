@@ -70,6 +70,11 @@ can produce informational findings. Pause, maintenance, and holds remain indepen
 controls do not prove that they are disabled. An unavailable restore API is incomplete evidence, not proof that restore
 analysis is inapplicable. Pod condition acknowledgement is independent of cluster or StatefulSet acknowledgement.
 
+A uniquely held disposable target can produce an informational restore finding while its cleanup retention period is
+active, even when the reported phase and execution stage remain `Unknown`. This requires complete reads, confirmed UID
+association, reported target application, a recorded successful execution result, and a valid positive retention period.
+The CLI preserves the reported phase. This finding does not establish completed cleanup or end-to-end recovery.
+
 Coverage is `evaluated`, `not_applicable`, or `insufficient_evidence` for the selected rules. The policy receives the
 capture completion time as its analysis reference. Missing evidence can prevent complete evaluation while independent
 confirmed findings remain visible. Integration-condition findings describe operator observations. The selected rules do
@@ -126,3 +131,38 @@ insufficiency cause.
 When normalized input fails validation, JSON includes an optional `validationPath`, and text identifies that field.
 Rejected normalized captures are omitted. The field path contains no source values or provider errors. Kubernetes 1.34
 and later are the qualification target; absent Ready-condition acknowledgement still prevents complete Pod evaluation.
+
+## Read-only restore qualification
+
+`TestOperatorRestoreDoctorAndBundleReplay` observes a caller-provisioned restore through live diagnosis, support-bundle
+collection, and repeated offline diagnosis. It creates no Kubernetes resources. Run it after the fixture reaches a stable
+reported phase. Ordinary `make check` skips this test; a skipped test adds no operator qualification.
+
+Set these environment variables with the prefix `KUBEBAO_TEST_RESTORE_`:
+
+| Suffix | Required value |
+| --- | --- |
+| `KUBECONFIG` | Dedicated kubeconfig path |
+| `CONTEXT` | Context in that kubeconfig |
+| `API_GROUP` | `kubebao.org` or `openbao.org` |
+| `NAMESPACE` | Namespace containing the cluster and restore request |
+| `CLUSTER`, `TARGET_UID` | Cluster name and expected current UID |
+| `REQUEST`, `REQUEST_UID` | Restore request name and UID |
+| `PHASE` | Expected reported restore phase |
+| `CANDIDATE_COUNT` | Exact count of all restore requests in the namespace, from 1 to 1,000 |
+| `COVERAGE` | Expected restore-rule state: `evaluated` or `insufficient_evidence` |
+| `MISSING_REASON` | Required when coverage is insufficient; for example, `association_unconfirmed` |
+| `FINDING_SEVERITY` | Expected finding for that request: `none`, `info`, or `error` |
+| `EXIT_CODE` | Expected diagnosis exit code with `--fail-on none`: `0` or `3` |
+
+Run the test with workspace resolution disabled:
+
+```sh
+GOWORK=off go test -count=1 -timeout=3m -v ./internal/cli \
+  -run '^TestOperatorRestoreDoctorAndBundleReplay$'
+```
+
+The test verifies the declared target UID, request UID, phase, UID association, and final target verification. It retains
+every admitted restore candidate, including requests without confirmed associations. Older unconfirmed requests can
+therefore keep coverage insufficient. The test checks the declared coverage and exit code without changing the CLI's
+historical-restore policy. Offline diagnosis uses the bundle's captured policy and reference time.

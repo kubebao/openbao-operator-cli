@@ -1,7 +1,7 @@
 # Shared client integration
 
 The CLI pins `github.com/kubebao/openbao-operator-client` through `go.mod`. Qualification identifies the exact client and
-CLI candidate separately from an operator release. The library uses evidence schema 4 and rule-set version 8. The CLI keeps
+CLI candidate separately from an operator release. The library uses evidence schema 5 and rule-set version 9. The CLI keeps
 command schema `v1` through presentation mappings. No local replacement or workspace is required for final builds.
 Go 1.27.4 is required.
 
@@ -26,8 +26,8 @@ implementation.
 
 ## Intentional corrections and output changes
 
-- Separate inspected contracts support `kubebao.org/v1alpha1@22894cdc/maintenance-pools-v1` and
-  `openbao.org/v1alpha1@9671c306/maintenance-pools-v1`. Automatic discovery requires an unambiguous API; explicit selection
+- Separate inspected contracts support `kubebao.org/v1alpha1@22894cdc/restore-retention-v1` and
+  `openbao.org/v1alpha1@9671c306/restore-retention-v1`. Automatic discovery requires an unambiguous API; explicit selection
   reads only that group. Group and UID remain pinned. Migration annotations do not imply cross-group identity.
 - Provider messages are excluded from all formats. Legacy message fields remain empty. Structured reasons and references
   remain available; no local rich-text policy is implemented.
@@ -69,7 +69,7 @@ Exact client, CLI, operator, image, and CRD identities belong in qualification p
 
 The inspected contracts cover legacy operator `0.6.1` and native candidate
 `22894cdc0a4aa5c442a07f2bf9902fe28ce02ea1`. The native contract does not qualify a released native operator.
-The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/v0.2.0/docs/compatibility.md)
+The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/f6a44c94d608ac12671a12ff13b6e2d84b202c1e/docs/compatibility.md)
 describes the operator fixtures and validation limits. API discovery alone does not qualify another operator build.
 
 Control qualification uses disposable Kubernetes 1.36.1 clusters on Linux/arm64 with OpenBao 2.7.2, self-initialization,
@@ -84,6 +84,27 @@ diagnosis for every selected rule.
 
 Kubernetes 1.34 is the observation floor. Missing current Pod Ready-condition acknowledgement limits coverage; the CLI
 never infers generation from omission. The shared client records its Kubernetes 1.34.11 field check separately.
+
+## Nonempty restore observation boundary
+
+Read-only CLI runtime qualification covers native operator build `587dd16386bc5a234520e22eec1bbedb904fa6dd` in a migrated
+demo on Kubernetes `1.36.1+k3s1`, Linux/amd64, and legacy operator `0.6.1` on Kubernetes `1.36.1`, Linux/arm64. Both use
+OpenBao `2.7.2`. Fixture harnesses independently verify selected restored KV data; the CLI reads Kubernetes observations.
+
+Native coverage includes an unheld historical `Unknown` request and a fresh disposable target during cleanup retention.
+Historical concerns remain excluded by CLI policy. Older requests without UID bindings keep restore coverage
+insufficient. During confirmed cleanup retention, the CLI reports an informational finding and preserves the reported
+`Unknown` phase and stage. All admitted namespace candidates remain in the capture. Independent adverse cluster
+conditions can still make the overall diagnosis incomplete.
+
+The legacy request reports `Unknown` with a matching hold and produces an error finding. Restore coverage is evaluated;
+missing backup-counter evidence keeps the overall diagnosis incomplete. Both baselines cover support-bundle collection
+and deterministic offline replay with the captured policy and reference time. Complete reads can produce a successful
+bundle while diagnosis exits `3`.
+
+A separate shared-client runtime test covers a terminal `Completed` receipt and absence of the disposable target. Live
+CLI fixture coverage uses retained `Unknown` targets. These checks do not qualify other operator builds, every failure
+mode, HA, production recovery, or the correctness of arbitrary restored application data.
 
 ## Incomplete and invalid evidence
 

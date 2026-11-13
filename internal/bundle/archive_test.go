@@ -16,6 +16,7 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
 func partialFixture() Bundle {
@@ -170,7 +171,11 @@ func TestRejectsUnsafeAndUnsupportedArchives(t *testing.T) {
 		}},
 		{name: "old evidence schema", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(e["manifest.json"],
-				[]byte(`"evidenceSchemaVersion":"4"`), []byte(`"evidenceSchemaVersion":"2"`), 1)
+				[]byte(`"evidenceSchemaVersion":"`+shared.SchemaVersion+`"`), []byte(`"evidenceSchemaVersion":"2"`), 1)
+		}},
+		{name: "schema 4 capture", change: func(e map[string][]byte) {
+			e["manifest.json"] = bytes.Replace(e["manifest.json"],
+				[]byte(`"evidenceSchemaVersion":"`+shared.SchemaVersion+`"`), []byte(`"evidenceSchemaVersion":"4"`), 1)
 		}},
 		{name: "duplicate JSON key", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(

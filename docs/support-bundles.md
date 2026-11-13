@@ -29,7 +29,7 @@ findings.json
 evidence/capture.json
 ```
 
-The current evidence schema is `4`. Older evidence schema versions are rejected; recollect them with the current
+The current evidence schema is `5`. The reader rejects earlier versions, including schema `4`; recollect them with the current
 client. Bundle format `v1` and command JSON `v1` remain separate from the evidence schema.
 
 - `manifest.json` records the format and evidence schema versions, CLI build, selected target, collection interval,
@@ -108,6 +108,10 @@ invalid gzip checksums, concatenated gzip streams, trailing nonzero tar data, in
 JSON fields in the manifest or capture, mismatched target identity, and unsupported versions. These checks validate
 format and internal consistency. They do not authenticate the bundle's source.
 
-Command and archive tests use synthetic Kubernetes responses. They cover replay, privacy exclusions, partial and
+Synthetic command and archive tests cover replay, privacy exclusions, partial and
 interrupted collection, file publication, output failures, and hostile inputs. They do not qualify additional operator
 versions, resource types, lifecycle actions, or nonempty restore correlation against a live operator.
+
+The [read-only restore runtime test](doctor.md#read-only-restore-qualification) checks a caller-provisioned nonempty
+restore and its bundle replay. See the [operator boundary](client-migration.md#nonempty-restore-observation-boundary)
+for the qualified baselines and limits.
