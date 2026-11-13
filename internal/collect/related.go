@@ -39,25 +39,22 @@ func (c *Client) CollectDiagnostic(ctx context.Context) evidence.Snapshot {
 	input.Verification = &result.Verification
 	if result.StatefulSets != nil {
 		input.StatefulSets = &diagnose.ResourceInput[shared.StatefulSet]{
-			AdapterContract: string(adapter.KubernetesAppsV1),
-			Collection:      result.StatefulSets.Collection,
-			Observations:    result.StatefulSets.Observations,
+			Collection:   result.StatefulSets.Collection,
+			Observations: result.StatefulSets.Observations,
 		}
 		snapshot.Collection = append(snapshot.Collection, collectionStep(result.StatefulSets.Collection))
 	}
 	if result.Pods != nil {
 		input.Pods = &diagnose.ResourceInput[shared.Pod]{
-			AdapterContract: string(adapter.KubernetesCoreV1),
-			Collection:      result.Pods.Collection,
-			Observations:    result.Pods.Observations,
+			Collection:   result.Pods.Collection,
+			Observations: result.Pods.Observations,
 		}
 		snapshot.Collection = append(snapshot.Collection, collectionStep(result.Pods.Collection))
 	}
 	if result.Restores != nil {
 		input.Restores = &diagnose.ResourceInput[shared.Restore]{
-			AdapterContract: input.AdapterContract,
-			Collection:      result.Restores.Collection,
-			Observations:    result.Restores.Observations,
+			Collection:   result.Restores.Collection,
+			Observations: result.Restores.Observations,
 		}
 		snapshot.Collection = append(snapshot.Collection, collectionStep(result.Restores.Collection))
 	}

@@ -18,20 +18,19 @@ import (
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-const FormatVersion = "v1"
+const FormatVersion = "v2"
 
 // Manifest describes collection independently of diagnostic completeness.
 type Manifest struct {
-	FormatVersion         string          `json:"formatVersion"`
-	EvidenceSchemaVersion string          `json:"evidenceSchemaVersion"`
-	CLI                   buildinfo.Info  `json:"cli"`
-	StartedAt             time.Time       `json:"startedAt"`
-	CompletedAt           time.Time       `json:"completedAt"`
-	Target                evidence.Target `json:"target"`
-	CollectionResult      string          `json:"collectionResult"`
-	Collection            []evidence.Step `json:"collection"`
-	Options               Options         `json:"options"`
-	Policy                diagnose.Policy `json:"policy"`
+	FormatVersion    string          `json:"formatVersion"`
+	CLI              buildinfo.Info  `json:"cli"`
+	StartedAt        time.Time       `json:"startedAt"`
+	CompletedAt      time.Time       `json:"completedAt"`
+	Target           evidence.Target `json:"target"`
+	CollectionResult string          `json:"collectionResult"`
+	Collection       []evidence.Step `json:"collection"`
+	Options          Options         `json:"options"`
+	Policy           diagnose.Policy `json:"policy"`
 }
 
 type Options struct {
@@ -48,8 +47,8 @@ type Bundle struct {
 func New(snapshot evidence.Snapshot, policy diagnose.Policy, info buildinfo.Info, timeout time.Duration) Bundle {
 	return Bundle{
 		Manifest: Manifest{
-			FormatVersion: FormatVersion, EvidenceSchemaVersion: shared.SchemaVersion,
-			CLI: info, StartedAt: snapshot.StartedAt, CompletedAt: snapshot.CompletedAt,
+			FormatVersion: FormatVersion,
+			CLI:           info, StartedAt: snapshot.StartedAt, CompletedAt: snapshot.CompletedAt,
 			Target: snapshot.Target, CollectionResult: snapshot.ResultCode,
 			Collection: snapshot.Collection, Options: Options{RequestTimeout: timeout}, Policy: policy,
 		},
@@ -58,7 +57,7 @@ func New(snapshot evidence.Snapshot, policy diagnose.Policy, info buildinfo.Info
 }
 
 // Snapshot rebuilds the analysis input without trusting archived display reports.
-// Legacy live-only display projections are deliberately not deserialized.
+// Live display projections are not deserialized.
 func (b Bundle) Snapshot() evidence.Snapshot {
 	target := b.Manifest.Target
 	target.Context = evidence.Clean(target.Context)
@@ -70,11 +69,14 @@ func (b Bundle) Snapshot() evidence.Snapshot {
 	}
 }
 
+func unsupportedFormat() error {
+	return errors.New("unsupported bundle format; collect a new bundle with the current CLI")
+}
+
 func (b Bundle) Validate() error {
 	m := b.Manifest
-	if m.FormatVersion != FormatVersion || m.EvidenceSchemaVersion != shared.SchemaVersion ||
-		m.Policy.RuleSetVersion != diagnose.RuleSetVersion {
-		return errors.New("unsupported bundle, evidence, or rule-set version")
+	if m.FormatVersion != FormatVersion {
+		return unsupportedFormat()
 	}
 	if m.StartedAt.IsZero() || m.CompletedAt.Before(m.StartedAt) || !m.Policy.ReferenceTime.Equal(m.CompletedAt) ||
 		m.Options.IncludeLogs || m.Options.RequestTimeout <= 0 || len(m.Collection) > 128 ||
@@ -89,7 +91,7 @@ func (b Bundle) Validate() error {
 			return errors.New("bundle lacks the selected target evidence")
 		}
 		// Validate the policy even when discovery or the initial read failed.
-		_, err := diagnose.Analyze(diagnose.Capture{SchemaVersion: shared.SchemaVersion}, m.Policy)
+		_, err := diagnose.Analyze(diagnose.Capture{}, m.Policy)
 		if err != nil {
 			return errors.New("unsupported or invalid diagnostic policy")
 		}
@@ -184,13 +186,11 @@ func (b Bundle) entries() (map[string][]byte, error) {
 	for name, value := range map[string]any{
 		"manifest.json": b.Manifest, "evidence/capture.json": b.Capture,
 		"findings.json": struct {
-			SchemaVersion  string                `json:"schemaVersion"`
-			RuleSetVersion string                `json:"ruleSetVersion"`
-			Policy         diagnose.Policy       `json:"policy"`
-			Complete       bool                  `json:"complete"`
-			Findings       []doctor.Finding      `json:"findings"`
-			Coverage       []doctor.RuleCoverage `json:"coverage"`
-		}{"v1", report.RuleSetVersion, report.Policy, report.Complete, report.Findings, report.Coverage},
+			Policy   diagnose.Policy       `json:"policy"`
+			Complete bool                  `json:"complete"`
+			Findings []doctor.Finding      `json:"findings"`
+			Coverage []doctor.RuleCoverage `json:"coverage"`
+		}{report.Policy, report.Complete, report.Findings, report.Coverage},
 	} {
 		data, err := json.Marshal(value)
 		if err != nil {

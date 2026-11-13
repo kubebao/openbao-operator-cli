@@ -49,7 +49,6 @@ type Step struct {
 type Observation struct {
 	CollectedAt            time.Time        `json:"collectedAt"`
 	ResourceVersion        string           `json:"resourceVersion"`
-	Adapter                string           `json:"adapter"`
 	Qualification          string           `json:"qualification"`
 	Generation             *int64           `json:"generation"`
 	ObservedGeneration     *int64           `json:"observedGeneration"`

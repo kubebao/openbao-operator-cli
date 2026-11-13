@@ -11,7 +11,7 @@ kubebao doctor prod -n security --max-backup-age 48h
 kubebao doctor --bundle prod-support.tar.gz
 ```
 
-The command accepts the [status](status.md) connection options and its source-bound native and legacy contracts.
+The command accepts the [status](status.md) connection options and its native and legacy API adapters.
 It does not mutate resources, collect logs, read Secrets, or contact OpenBao or cloud APIs. Local provider-text
 projection is not implemented. [Support bundles](support-bundles.md) provide offline diagnosis.
 
@@ -43,7 +43,8 @@ Independent approved evidence remains available after another scope fails.
 
 ## Rules and completeness
 
-The rule-set version comes from the pinned library and is independent of command schema version `v1`.
+The pinned client release defines diagnostic behavior. Rule IDs remain stable; policies select rules, thresholds, and
+the analysis reference time. No separate rule-set version is required.
 
 | Rule | Selected interpretation |
 | --- | --- |
@@ -87,8 +88,8 @@ Configuration does not prove that backup storage or provider permissions work. M
 
 ## Output and process results
 
-JSON retains the command envelope fields `schemaVersion`, `ruleSetVersion`, `analysisTime`, `failureThreshold`,
-`resultCode`, `exitCode`, `findings`, `coverage`, and `evidence`. It adds the actual shared `policy` and finding `id`.
+JSON contains the command envelope fields `schemaVersion`, `analysisTime`, `failureThreshold`,
+`resultCode`, `exitCode`, `findings`, `coverage`, `evidence`, the selected shared `policy`, and each finding `id`.
 The evidence envelope adds `normalizedEvidence`, containing every admitted candidate before association filtering,
 including foreign candidates. These bounded, approved facts preserve collection counts and deterministic replay.
 The legacy `related` view contains confirmed associations and metadata-only omissions. Provider messages and raw

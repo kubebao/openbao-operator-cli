@@ -12,8 +12,8 @@ kubebao status prod --watch --watch-interval 2s
 
 Kubeconfig loading, context and namespace selection, credential plugins, rendering, and process results belong to the
 CLI. The shared client owns projections, bounded reads, generation acknowledgement, and diagnostic interpretation.
-The supported source contracts are `kubebao.org/v1alpha1@22894cdc/restore-retention-v1` and
-`openbao.org/v1alpha1@9671c306/restore-retention-v1`. API discovery does not qualify an operator release. Automatic
+The supported API adapters are `kubebao.org/v1alpha1` and
+`openbao.org/v1alpha1`. API discovery does not qualify an operator release. Automatic
 selection discovers both declared APIs and selects only an unambiguous served cluster API. If both APIs are served,
 use `--api-group kubebao.org` or `--api-group openbao.org`. Explicit selection queries only that discovery endpoint.
 Denied, malformed, or failed discovery remains incomplete and does not select another group.
@@ -26,7 +26,7 @@ because a finding exists or a rule lacks evidence. `--verbose` adds structured r
 times, and interpretation limits. Provider messages are excluded from text, verbose, and JSON output. Message fields
 remain empty for layout compatibility. A separate local-text projection policy is not implemented.
 
-Missing and invalid values remain unknown in normalized evidence. The inspected adapter can interpret documented zero
+Normalized evidence distinguishes missing values from malformed values. The inspected adapter can interpret documented zero
 omission for ready replicas after current resource acknowledgement. An omitted backup failure counter remains unknown.
 A matching resource generation does not acknowledge every condition. Missing, stale, and inconsistent condition
 acknowledgement cannot establish a current finding. Collection time and transition time are separate; neither proves a
@@ -50,7 +50,7 @@ enter output.
 ## JSON and process results
 
 The command envelope retains `schemaVersion: "v1"`, `resultCode`, `exitCode`, collection times, `target`, `observation`,
-and `collection`. It adds `normalizedEvidence`, a shared evidence-schema-5 capture containing approved typed facts and
+and `collection`. It includes `normalizedEvidence`, a shared capture containing approved typed facts and
 actual collection outcomes. Display projections are mappings; diagnostic rules do not reinterpret them. Process exit
 codes exist only in command envelopes, outside normalized evidence and pure analysis.
 

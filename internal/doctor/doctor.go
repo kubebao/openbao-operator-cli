@@ -9,12 +9,9 @@ import (
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
-	"github.com/kubebao/openbao-operator-client/adapter"
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
-
-const RuleSetVersion = diagnose.RuleSetVersion
 
 type Severity string
 
@@ -42,7 +39,6 @@ type RuleCoverage struct {
 type Report struct {
 	ValidationPath string            `json:"validationPath,omitempty"`
 	SchemaVersion  string            `json:"schemaVersion"`
-	RuleSetVersion string            `json:"ruleSetVersion"`
 	AnalysisTime   time.Time         `json:"analysisTime"`
 	Policy         diagnose.Policy   `json:"policy"`
 	Findings       []Finding         `json:"findings"`
@@ -52,13 +48,7 @@ type Report struct {
 }
 
 func Policy(at time.Time) diagnose.Policy {
-	p := diagnose.DefaultPolicy(
-		at,
-		[]string{
-			string(adapter.V1Alpha1Snapshot), string(adapter.KubeBaoV1Alpha1Snapshot),
-			string(adapter.KubernetesAppsV1), string(adapter.KubernetesCoreV1),
-		},
-	)
+	p := diagnose.DefaultPolicy(at)
 	p.Rules = []diagnose.RuleID{
 		diagnose.RuleGeneration,
 		diagnose.RuleAvailability,
@@ -73,7 +63,6 @@ func Policy(at time.Time) diagnose.Policy {
 		diagnose.RuleRestriction,
 		diagnose.RuleRestore,
 	}
-	p.RestoreUIDBindingContracts = []string{string(adapter.V1Alpha1Snapshot), string(adapter.KubeBaoV1Alpha1Snapshot)}
 	p.ReportHistoricalRestores = false
 	p.MaxSubjects = 3001
 	return p
@@ -105,14 +94,13 @@ func StatusPolicy(at time.Time) diagnose.Policy {
 
 func Analyze(snapshot evidence.Snapshot, policy diagnose.Policy) (Report, error) {
 	report := Report{
-		SchemaVersion:  "v1",
-		RuleSetVersion: RuleSetVersion,
-		AnalysisTime:   policy.ReferenceTime,
-		Policy:         policy,
-		Findings:       []Finding{},
-		Coverage:       []RuleCoverage{},
-		Evidence:       snapshot,
-		Complete:       false,
+		SchemaVersion: "v1",
+		AnalysisTime:  policy.ReferenceTime,
+		Policy:        policy,
+		Findings:      []Finding{},
+		Coverage:      []RuleCoverage{},
+		Evidence:      snapshot,
+		Complete:      false,
 	}
 	if snapshot.NormalizedEvidence == nil {
 		if snapshot.ResultCode != "completed" {

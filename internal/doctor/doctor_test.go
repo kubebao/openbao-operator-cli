@@ -63,7 +63,7 @@ func captureFixture(t *testing.T) evidence.Snapshot {
 	options := adapter.ProjectionOptions{
 		Origin:      "fixture",
 		CollectedAt: at,
-		Contract:    adapter.V1Alpha1Snapshot,
+		Contract:    adapter.OpenBaoV1Alpha1,
 		Limits:      adapter.DefaultProjectionLimits(),
 	}
 	cluster, err := adapter.ProjectCluster(
@@ -199,25 +199,21 @@ func captureFixture(t *testing.T) evidence.Snapshot {
 	pods := read("", "v1", "pods", shared.ReadList, 1)
 	pods.Scope.Selector = sets.Scope.Selector
 	input := diagnose.ClusterInput{
-		Subject:         cluster.Reference.Identity,
-		AdapterContract: cluster.AdapterContract,
-		Observation:     &cluster,
-		Collection:      root,
-		Verification:    &verification,
+		Subject:      cluster.Reference.Identity,
+		Observation:  &cluster,
+		Collection:   root,
+		Verification: &verification,
 		StatefulSets: &diagnose.ResourceInput[shared.StatefulSet]{
-			AdapterContract: string(adapter.KubernetesAppsV1),
-			Collection:      sets,
-			Observations:    []shared.StatefulSet{set},
+			Collection:   sets,
+			Observations: []shared.StatefulSet{set},
 		},
 		Pods: &diagnose.ResourceInput[shared.Pod]{
-			AdapterContract: string(adapter.KubernetesCoreV1),
-			Collection:      pods,
-			Observations:    []shared.Pod{pod},
+			Collection:   pods,
+			Observations: []shared.Pod{pod},
 		},
 		Restores: &diagnose.ResourceInput[shared.Restore]{
-			AdapterContract: cluster.AdapterContract,
-			Collection:      read("openbao.org", "v1alpha1", "openbaorestores", shared.ReadList, 0),
-			Observations:    []shared.Restore{},
+			Collection:   read("openbao.org", "v1alpha1", "openbaorestores", shared.ReadList, 0),
+			Observations: []shared.Restore{},
 		},
 	}
 	return evidence.Snapshot{
@@ -226,7 +222,7 @@ func captureFixture(t *testing.T) evidence.Snapshot {
 		StartedAt:          at,
 		CompletedAt:        at.Add(time.Second),
 		Target:             evidence.Target{Context: "fixture", Namespace: "security", Name: "prod", UID: "cluster"},
-		NormalizedEvidence: &diagnose.Capture{SchemaVersion: shared.SchemaVersion, Clusters: []diagnose.ClusterInput{input}},
+		NormalizedEvidence: &diagnose.Capture{Clusters: []diagnose.ClusterInput{input}},
 	}
 }
 
@@ -284,7 +280,7 @@ func TestOnlyNormalizedEvidenceDrivesAnalysis(t *testing.T) {
 	if err != nil || !report.Complete || len(report.Findings) != 0 {
 		t.Fatalf("legacy display drove diagnosis: %+v %v", report, err)
 	}
-	snapshot.NormalizedEvidence.SchemaVersion = "unsupported"
+	snapshot.NormalizedEvidence.Clusters[0].Observation.Reference.APIVersion = "unsupported/v1"
 	if _, err := Analyze(snapshot, Policy(snapshot.CompletedAt)); err == nil {
 		t.Fatal("invalid normalized evidence was accepted")
 	}

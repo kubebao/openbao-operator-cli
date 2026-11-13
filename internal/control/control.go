@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kubebao/openbao-operator-client/adapter"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 	"github.com/kubebao/openbao-operator-client/operations"
 
@@ -51,7 +52,7 @@ func Run(ctx context.Context, client *collect.Client, options Options) Report {
 		}
 		return report
 	}
-	plan, err := prepare(cluster, options)
+	plan, err := prepare(cluster, client.Contract(), options)
 	if err != nil {
 		report.ResultCode, report.ExitCode = "invalid_control_evidence", 3
 		return report
@@ -75,11 +76,11 @@ func Run(ctx context.Context, client *collect.Client, options Options) Report {
 	return wait(ctx, client, options, report)
 }
 
-func prepare(cluster shared.Cluster, options Options) (operations.Plan, error) {
+func prepare(cluster shared.Cluster, contract adapter.Contract, options Options) (operations.Plan, error) {
 	if options.Control == operations.ControlMaintenance {
-		return operations.PrepareMaintenance(cluster, options.Enabled)
+		return operations.PrepareMaintenance(cluster, contract, options.Enabled)
 	}
-	return operations.PreparePause(cluster, options.Enabled)
+	return operations.PreparePause(cluster, contract, options.Enabled)
 }
 
 func observed(snapshot evidence.Snapshot) (shared.Cluster, bool) {

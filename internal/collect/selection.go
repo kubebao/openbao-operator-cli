@@ -10,14 +10,17 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 )
 
+// Contract returns the adapter selected for the live target.
+func (c *Client) Contract() adapter.Contract { return c.contract }
+
 // ControlClient shares the caller's transport policy. Collection never submits a control.
 func (c *Client) ControlClient() *operations.Client { return c.controls }
 
 func contractFor(group string) adapter.Contract {
 	if group == "kubebao.org" {
-		return adapter.KubeBaoV1Alpha1Snapshot
+		return adapter.KubeBaoV1Alpha1
 	}
-	return adapter.V1Alpha1Snapshot
+	return adapter.OpenBaoV1Alpha1
 }
 
 func (c *Client) selectAPI(ctx context.Context, snapshot *evidence.Snapshot) bool {

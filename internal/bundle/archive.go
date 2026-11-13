@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -180,6 +181,17 @@ func readArchive(ctx context.Context, source io.Reader) (Bundle, error) {
 	entries, err := readEntries(ctx, data)
 	if err != nil {
 		return Bundle{}, err
+	}
+	// Inspect only the format marker before decoding the current manifest shape.
+	// Earlier formats have no migration path.
+	var header struct {
+		FormatVersion string `json:"formatVersion"`
+	}
+	if err := json.Unmarshal(entries["manifest.json"], &header); err != nil {
+		return Bundle{}, errors.New("invalid bundle manifest")
+	}
+	if header.FormatVersion != FormatVersion {
+		return Bundle{}, unsupportedFormat()
 	}
 	var b Bundle
 	if err := decodeJSON(entries["manifest.json"], &b.Manifest); err != nil {

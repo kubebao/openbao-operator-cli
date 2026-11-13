@@ -16,7 +16,6 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
-	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
 func partialFixture() Bundle {
@@ -101,7 +100,7 @@ func TestFailedOrCanceledWritePublishesNothing(t *testing.T) {
 		b := partialFixture()
 		ctx, cancel := context.WithCancel(context.Background())
 		if invalid {
-			b.Manifest.Policy.RuleSetVersion = "future"
+			b.Manifest.Policy.MaxEvidenceAge = 0
 		} else {
 			cancel()
 		}
@@ -167,15 +166,17 @@ func TestRejectsUnsafeAndUnsupportedArchives(t *testing.T) {
 		},
 		{name: "missing entry", change: func(e map[string][]byte) { delete(e, "summary.txt") }},
 		{name: "future version", change: func(e map[string][]byte) {
-			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"formatVersion":"v1"`), []byte(`"formatVersion":"future"`), 1)
+			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"formatVersion":"v2"`), []byte(`"formatVersion":"future"`), 1)
 		}},
-		{name: "old evidence schema", change: func(e map[string][]byte) {
+		{name: "old bundle format", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(e["manifest.json"],
-				[]byte(`"evidenceSchemaVersion":"`+shared.SchemaVersion+`"`), []byte(`"evidenceSchemaVersion":"2"`), 1)
+				[]byte(`"formatVersion":"v2"`), []byte(`"formatVersion":"v1","evidenceSchemaVersion":"5"`), 1)
 		}},
-		{name: "schema 4 capture", change: func(e map[string][]byte) {
-			e["manifest.json"] = bytes.Replace(e["manifest.json"],
-				[]byte(`"evidenceSchemaVersion":"`+shared.SchemaVersion+`"`), []byte(`"evidenceSchemaVersion":"4"`), 1)
+		{name: "removed evidence schema field", change: func(e map[string][]byte) {
+			e["manifest.json"] = append([]byte(`{"evidenceSchemaVersion":"5",`), e["manifest.json"][1:]...)
+		}},
+		{name: "removed rule set field", change: func(e map[string][]byte) {
+			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"policy":{`), []byte(`"policy":{"ruleSetVersion":"9",`), 1)
 		}},
 		{name: "duplicate JSON key", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(
@@ -267,5 +268,44 @@ func TestRejectsCompressedAndExpandedSizeLimits(t *testing.T) {
 	}
 	if _, err := readArchive(context.Background(), &bomb); err == nil {
 		t.Fatal("expanded limit not enforced")
+	}
+}
+
+func TestOldBundleFormatRequiresRecollection(t *testing.T) {
+	t.Parallel()
+	entries, err := partialFixture().entries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries["manifest.json"] = bytes.Replace(entries["manifest.json"], []byte(`"formatVersion":"v2"`),
+		[]byte(`"formatVersion":"v1","evidenceSchemaVersion":"5"`), 1)
+	_, err = readArchive(context.Background(), bytes.NewReader(testArchive(t, entries, nil)))
+	if err == nil || err.Error() != "unsupported bundle format; collect a new bundle with the current CLI" {
+		t.Fatal("old bundle format did not produce recollection guidance")
+	}
+}
+
+func TestBundleUsesOneFormatMarker(t *testing.T) {
+	t.Parallel()
+	entries, err := partialFixture().entries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range entries {
+		if name == "summary.txt" {
+			continue
+		}
+		for _, removed := range []string{
+			"schemaVersion", "evidenceSchemaVersion", "ruleSetVersion", "adapterContract",
+			"approvedContracts", "restoreUIDBindingContracts",
+		} {
+			if bytes.Contains(data, []byte(removed)) {
+				t.Fatal("bundle contains removed version or projection metadata")
+			}
+		}
+	}
+	if bytes.Count(entries["manifest.json"], []byte(`"formatVersion"`)) != 1 ||
+		!bytes.Contains(entries["manifest.json"], []byte(`"formatVersion":"v2"`)) {
+		t.Fatal("bundle has no single current format marker")
 	}
 }

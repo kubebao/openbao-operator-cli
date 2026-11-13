@@ -8,12 +8,10 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/kubebao/openbao-operator-cli/internal/bundle"
-	"github.com/kubebao/openbao-operator-client/adapter"
 )
 
 // Native API fixtures retain the operator's legacy workload metadata keys.
@@ -56,16 +54,34 @@ func TestNativeObservationBundleAndOfflineDiagnosis(t *testing.T) {
 			if !json.Valid(stdout.Bytes()) || strings.Contains(stdout.String(), "PRIVATE_CANARY") {
 				t.Fatal("invalid or unapproved native command output")
 			}
+			for _, removed := range []string{`"ruleSetVersion"`, `"adapterContract"`, `"approvedContracts"`, `"adapter"`} {
+				if bytes.Contains(stdout.Bytes(), []byte(removed)) {
+					t.Fatal("native command output contains removed projection or rule metadata")
+				}
+			}
 		})
 	}
 	stored, err := bundle.Read(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	contract := string(adapter.KubeBaoV1Alpha1Snapshot)
-	if !slices.Contains(stored.Manifest.Policy.ApprovedContracts, contract) ||
-		!slices.Contains(stored.Manifest.Policy.RestoreUIDBindingContracts, contract) {
-		t.Fatal("native projection or restore binding contract missing from persisted policy")
+	if stored.Manifest.FormatVersion != "v2" || stored.Capture == nil || len(stored.Capture.Clusters) != 1 {
+		t.Fatal("bundle lost the current format or normalized capture")
+	}
+	capture, err := json.Marshal(stored.Capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := json.Marshal(stored.Manifest.Policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, removed := range []string{
+		"schemaVersion", "ruleSetVersion", "adapterContract", "approvedContracts", "restoreUIDBindingContracts",
+	} {
+		if bytes.Contains(capture, []byte(removed)) || bytes.Contains(policy, []byte(removed)) {
+			t.Fatal("bundle retains removed evidence or rule version metadata")
+		}
 	}
 	if stored.Snapshot().Target.APIGroup != "kubebao.org" {
 		t.Fatal("bundle lost native target identity")

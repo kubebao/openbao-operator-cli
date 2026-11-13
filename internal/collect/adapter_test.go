@@ -38,7 +38,7 @@ func TestSharedProjectionMapsUnknownAndReportedFields(t *testing.T) {
 		adapter.ProjectionOptions{
 			Origin:      "fixture",
 			CollectedAt: captured,
-			Contract:    adapter.V1Alpha1Snapshot,
+			Contract:    adapter.OpenBaoV1Alpha1,
 			Limits:      adapter.DefaultProjectionLimits(),
 		},
 	)

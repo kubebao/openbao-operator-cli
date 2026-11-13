@@ -193,13 +193,11 @@ func (c *Client) collect(ctx context.Context, snapshot *evidence.Snapshot) {
 	snapshot.Target = c.target
 	snapshot.Observation = projectCluster(cluster)
 	snapshot.NormalizedEvidence = &diagnose.Capture{
-		SchemaVersion: shared.SchemaVersion,
 		Clusters: []diagnose.ClusterInput{
 			{
-				Subject:         cluster.Reference.Identity,
-				AdapterContract: cluster.AdapterContract,
-				Observation:     &cluster,
-				Collection:      result.Collection,
+				Subject:     cluster.Reference.Identity,
+				Observation: &cluster,
+				Collection:  result.Collection,
 			},
 		},
 	}

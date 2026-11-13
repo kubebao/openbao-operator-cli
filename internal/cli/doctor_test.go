@@ -11,8 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 )
 
 func doctorServer(t *testing.T, ready bool, denied bool) *httptest.Server {
@@ -97,7 +95,7 @@ func TestDoctorCommandResults(t *testing.T) {
 			if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
 				t.Fatalf("invalid JSON: %v; stderr %s", err, &stderr)
 			}
-			if code != tc.code || report.ExitCode != tc.code || report.RuleSetVersion != doctor.RuleSetVersion {
+			if code != tc.code || report.ExitCode != tc.code || report.SchemaVersion != "v1" {
 				t.Fatalf("unexpected report: code %d, %+v", code, report)
 			}
 			if report.Evidence.Target.UID != "cluster" || len(report.Evidence.Related.StatefulSets) != 1 {

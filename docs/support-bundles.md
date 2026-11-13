@@ -20,7 +20,7 @@ or publication.
 
 ## Contents and disclosure scope
 
-Format `v1` contains four regular files:
+Format `v2` contains four regular files:
 
 ```text
 manifest.json
@@ -29,12 +29,12 @@ findings.json
 evidence/capture.json
 ```
 
-The current evidence schema is `5`. The reader rejects earlier versions, including schema `4`; recollect them with the current
-client. Bundle format `v1` and command JSON `v1` remain separate from the evidence schema.
+The manifest has one format marker: `formatVersion: "v2"`. The reader rejects other formats. Collect a new bundle
+with the current CLI when a bundle uses an unsupported format. No migration reader is provided.
 
-- `manifest.json` records the format and evidence schema versions, CLI build, selected target, collection interval,
+- `manifest.json` records the bundle format, CLI build, selected target, collection interval,
   collection result and steps, requested timeout, log option, and diagnostic policy. The policy contains the selected
-  rule IDs, rule-set version, projection contracts, thresholds, and analysis reference time.
+  rule IDs, thresholds, and analysis reference time. The client release defines evidence and rule semantics.
 - `summary.txt` contains captured times, collection results, findings, references, and coverage limits.
 - `findings.json` contains the mapped findings, coverage, policy, and diagnostic completeness.
 - `evidence/capture.json` contains the shared normalized observations. It is `null` when discovery or the initial
@@ -79,15 +79,16 @@ kubebao doctor --bundle prod-support.tar.gz --output json --fail-on error
 
 Offline diagnosis loads no kubeconfig and makes no network requests. It uses the captured evidence, policy, and analysis
 reference time. It recomputes findings and coverage; it does not trust `summary.txt` or `findings.json` as evidence.
-Equivalent live and offline inputs produce the same diagnostic findings, coverage, and rule version.
+With the same CLI build, equivalent live and offline inputs produce the same findings and coverage.
 
 The report describes the captured cluster state. It does not establish the current state. Text identifies offline
 analysis and captured times. JSON uses `source: "bundle"`. Kubernetes flags, a cluster name, and `--max-backup-age` cannot
 be combined with `--bundle`. Output and failure-threshold options remain available. Doctor retains its usual exit codes,
 including `2` for findings and `3` for incomplete collection or evaluation.
 
-The reader accepts only supported bundle, evidence, and rule-set versions. It does not migrate old captures or change
-their policy automatically. A future command for analysis with newer rules requires a separate contract.
+The reader accepts only bundle format `v2` and the current typed evidence shape. It rejects unknown JSON fields and
+invalid evidence. It preserves the captured policy and reference time. Use the recorded CLI build to reproduce its
+diagnostic semantics; rule behavior changes with the pinned client release.
 
 ## Archive limits
 

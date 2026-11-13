@@ -191,7 +191,7 @@ func TestBundleIdentityAndPolicyValidation(t *testing.T) {
 	}
 	for _, change := range []func(*bundle.Bundle){
 		func(b *bundle.Bundle) { b.Manifest.Target.UID = "replacement" },
-		func(b *bundle.Bundle) { b.Manifest.Policy.RuleSetVersion = "future" },
+		func(b *bundle.Bundle) { b.Manifest.Policy.MaxEvidenceAge = 0 },
 		func(b *bundle.Bundle) { b.Manifest.CompletedAt = b.Manifest.StartedAt.Add(-time.Second) },
 		func(b *bundle.Bundle) { b.Manifest.StartedAt = b.Manifest.CompletedAt },
 		func(b *bundle.Bundle) { b.Manifest.CollectionResult = "PRIVATE_CANARY" },
@@ -200,7 +200,7 @@ func TestBundleIdentityAndPolicyValidation(t *testing.T) {
 		stored := bundle.New(live.Evidence.Snapshot, live.Policy, buildinfo.Current(), time.Second)
 		change(&stored)
 		if err := stored.Validate(); err == nil {
-			t.Fatal("changed target, interval, or rule contract was accepted")
+			t.Fatal("changed target, interval, or invalid policy was accepted")
 		}
 	}
 }

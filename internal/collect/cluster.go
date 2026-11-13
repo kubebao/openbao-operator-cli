@@ -65,7 +65,6 @@ func projectCluster(source shared.Cluster) *evidence.Observation {
 	o := &evidence.Observation{
 		CollectedAt:        *source.Reference.CollectedAt.Value,
 		ResourceVersion:    text(source.Reference.ResourceVersion),
-		Adapter:            source.AdapterContract,
 		Qualification:      "unqualified",
 		Generation:         source.Generation.Value,
 		ObservedGeneration: source.ObservedGeneration.Value,
@@ -90,7 +89,7 @@ func projectCluster(source shared.Cluster) *evidence.Observation {
 		Conditions:    conditions(source.Conditions, source.Generation, "status.conditions"),
 		Attention:     []evidence.Attention{},
 		Limitations: []string{
-			"The adapter contract records inspected source semantics, not operator-release qualification.",
+			"Projection uses inspected API semantics; discovery alone does not qualify an operator release.",
 			"Collection time is not an operator heartbeat; condition transitions are not producer observation times.",
 			"Cluster fields do not verify maintenance propagation or current restore progress.",
 			"Provider messages are excluded, including verbose and JSON output.",

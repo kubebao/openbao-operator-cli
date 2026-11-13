@@ -138,8 +138,7 @@ func assertRestoreRuntimeCapture(t *testing.T, report diagnosticReport, config r
 		}
 		confirmed = true
 	}
-	if !confirmed || report.Policy.ReportHistoricalRestores ||
-		!slices.Contains(report.Policy.RestoreUIDBindingContracts, input.AdapterContract) {
+	if !confirmed || report.Policy.ReportHistoricalRestores {
 		t.Fatal("live restore request or the CLI's declared historical-restore policy was lost")
 	}
 	assertRestoreRuntimeAnalysis(t, report, config)

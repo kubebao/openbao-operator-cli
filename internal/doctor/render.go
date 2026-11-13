@@ -11,12 +11,11 @@ func WriteText(writer io.Writer, report Report, resultCode string, verbose bool)
 	target := report.Evidence.Target
 	fmt.Fprintf(
 		&buffer,
-		"Diagnosis: %s / %s/%s\nResult: %s; rules %s\n",
+		"Diagnosis: %s / %s/%s\nResult: %s\n",
 		target.Context,
 		target.Namespace,
 		target.Name,
 		resultCode,
-		report.RuleSetVersion,
 	)
 	if report.ValidationPath != "" {
 		fmt.Fprintf(&buffer, "Validation field: %s\n", report.ValidationPath)

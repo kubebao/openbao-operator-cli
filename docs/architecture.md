@@ -4,7 +4,7 @@
 
 The Go executable provides cluster status, workload and recovery diagnosis, support bundles, offline diagnosis,
 guarded controls, local archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the
-caller's kubeconfig and projects public v1alpha1 fields into a typed observation. Separate source-bound contracts support `kubebao.org` and
+caller's kubeconfig and projects public v1alpha1 fields into a typed observation. Separate API adapters support `kubebao.org` and
 `openbao.org`, unambiguous API discovery, explicit selection, and UID-pinned polling.
 
 The first status implementation does not collect related workloads or restore requests. It reports the restore-hold
@@ -54,8 +54,9 @@ contents, literal environment values, container arguments, arbitrary annotations
 Optional logs require time, byte, and duration limits. Record omissions, truncation, and redactions without promising
 complete removal of sensitive information.
 
-Live and offline diagnosis consume the same normalized observations. Record rule-set versions, policy thresholds, and
-the analysis reference time. Offline analysis retains the captured times and makes no claim about current cluster state.
+Live and offline diagnosis consume the same normalized observations. The pinned client release defines the typed model
+and rules. Bundles record the CLI build, policy thresholds, and analysis reference time under one format marker.
+Offline analysis retains the captured times and makes no claim about current cluster state.
 Bundle readers enforce format, path, and size limits without extracting arbitrary files.
 
 ## Controls
