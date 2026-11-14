@@ -19,7 +19,7 @@ recovery restrictions from that captured evidence. It does not change cluster st
 `kubebao` connects to Kubernetes through the caller's kubeconfig. It requires neither the console nor a backend service.
 The operator retains responsibility for reconciliation and lifecycle safety.
 
-The command set includes status, diagnosis, local support bundles, offline diagnosis, pause and resume, maintenance
+The command set includes cluster listing, status, diagnosis, local support bundles, offline diagnosis, pause and resume, maintenance
 enable and disable, and guarded rolling restart. Backup execution, upgrades, restores, scaling, installation, and automatic repair remain
 outside its scope. General OpenBao administration continues through `bao`.
 

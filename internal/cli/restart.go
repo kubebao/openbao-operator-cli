@@ -57,6 +57,7 @@ func newRestartCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 		},
 	}
 	addKubernetesFlags(command, &access)
+	addClusterArgument(command, &access)
 	addControlFlags(command, &options, &output)
 	return command
 }

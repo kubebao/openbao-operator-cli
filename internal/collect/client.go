@@ -52,6 +52,18 @@ func NewClient(options Options) (*Client, error) {
 	if len(validation.IsDNS1123Subdomain(options.Name)) != 0 {
 		return nil, errors.New("cluster name must be a Kubernetes DNS subdomain")
 	}
+	return newClient(options)
+}
+
+// NewListClient selects a context and namespace without a cluster name. Use it only with List.
+func NewListClient(options Options) (*Client, error) {
+	if options.Name != "" {
+		return nil, errors.New("a list client does not select a cluster name")
+	}
+	return newClient(options)
+}
+
+func newClient(options Options) (*Client, error) {
 	if options.APIGroup != "" && options.APIGroup != "openbao.org" && options.APIGroup != "kubebao.org" {
 		return nil, errors.New("unsupported API group: use kubebao.org or openbao.org")
 	}

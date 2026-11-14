@@ -60,10 +60,12 @@ func newStatusCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	}
 	flags := command.Flags()
 	addKubernetesFlags(command, &options)
+	addClusterArgument(command, &options)
 	flags.StringVarP(&output, "output", "o", output, "Output format: text or json (newline-delimited in watch mode)")
 	flags.BoolVarP(&verbose, "verbose", "v", verbose, "Include evidence fields, structured reasons, and interpretation limits")
 	flags.BoolVarP(&watch, "watch", "w", watch, "Refresh the selected resource until interrupted or collection fails")
 	flags.DurationVar(&interval, "watch-interval", interval, "Delay between watch collections; minimum 100ms")
+	completeOutput(command)
 	return command
 }
 

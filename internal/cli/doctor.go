@@ -70,12 +70,21 @@ func newDoctorCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 		},
 	}
 	addKubernetesFlags(command, &options)
+	command.ValidArgsFunction = func(c *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if c.Flags().Changed("bundle") {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return completeClusterNames(&options)(c, args, toComplete)
+	}
 	command.Flags().StringVarP(&output, "output", "o", output, "Output format: text or json")
+	completeOutput(command)
 	command.Flags().
 		BoolVarP(&verbose, "verbose", "v", verbose, "Include evidence references, rule coverage, and successful collection steps")
 	command.Flags().StringVar(&failOn, "fail-on", failOn, "Finding threshold for exit code 2: info, warning, error, or none")
 	command.Flags().StringVar(&bundlePath, "bundle", "", "Diagnose a local support bundle without cluster access")
 	addBackupAgeFlag(command, &maxBackupAge)
+	_ = command.RegisterFlagCompletionFunc("fail-on", cobra.FixedCompletions([]cobra.Completion{"info", "warning", "error", "none"},
+		cobra.ShellCompDirectiveNoFileComp))
 	return command
 }
 

@@ -19,6 +19,8 @@ make build
 ./bin/kubebao version --output json
 ```
 
+`--version` has no short form: `-v` means `--verbose` on `status` and `doctor`.
+
 Help and version commands require no kubeconfig, Kubernetes cluster, console, or backend service.
 
 Version JSON uses `schemaVersion: "v1"` and contains `version`, `commit`, `goVersion`, `os`, and `arch` string fields.
@@ -34,6 +36,30 @@ Text output uses colour and symbols when standard output is a terminal. Select `
 `auto` honours `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `TERM`. Pipes, files, and JSON never receive escape
 sequences. Symbols carry meaning without colour: `✓` good, `!` warning, `✗` failure, `?` unknown. Text reports suggest
 copyable follow-up commands for the same cluster, namespace, and context.
+
+## List clusters
+
+```sh
+./bin/kubebao list -n security
+./bin/kubebao list -A
+./bin/kubebao list -A --output json
+```
+
+`list` reads OpenBaoClusters in one namespace, or in every namespace with `-A`, and shows each cluster's version, voter
+readiness, availability, pause, maintenance, and status attention. It needs `list` permission on `openbaoclusters`.
+See [status](docs/status.md#list-clusters).
+
+## Shell completion
+
+```sh
+source <(kubebao completion bash)
+kubebao completion zsh > "${fpath[1]}/_kubebao"
+kubebao completion fish > ~/.config/fish/completions/kubebao.fish
+```
+
+Completion suggests commands, flag values, kubeconfig contexts, and cluster names. Cluster names come from a bounded
+`list` of the selected namespace with a five-second timeout; without list permission, names are not suggested. See
+[installation](docs/installation.md#shell-completion) for the kubectl plugin.
 
 ## Cluster status
 

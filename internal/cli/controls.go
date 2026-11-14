@@ -104,6 +104,7 @@ func newControlCommand(
 		},
 	}
 	addKubernetesFlags(command, &access)
+	addClusterArgument(command, &access)
 	addControlFlags(command, &options, &output)
 	return command
 }
@@ -115,6 +116,7 @@ func addControlFlags(command *cobra.Command, options *control.Options, output *s
 	flags.BoolVar(&options.Wait, "wait", false, "Wait until later evidence shows the operator applied the change")
 	flags.DurationVar(&options.WaitTimeout, "wait-timeout", options.WaitTimeout, "Maximum time to wait after submission")
 	flags.DurationVar(&options.PollInterval, "poll-interval", options.PollInterval, "Delay between checks while waiting; minimum 100ms")
+	completeOutput(command)
 }
 
 func validateWait(options control.Options) error {

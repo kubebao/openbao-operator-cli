@@ -75,6 +75,24 @@ Reports go to standard output. A nonzero result also writes a short result messa
 prefixes it with `Error:`, and exit code `3` does not, because the report already describes the result. Input and
 kubeconfig failures produce no status report. Version output has a separate JSON contract.
 
+## List clusters
+
+`kubebao list` lists OpenBaoClusters in the selected namespace. `--all-namespaces` (`-A`) lists every namespace. The
+command uses the same API selection as status, then one bounded LIST of at most 1,000 clusters in 16 pages. Each listed
+cluster is projected and evaluated with the same status rules, so the ATTENTION column matches the verdict of
+`kubebao status`. Rows are sorted by namespace and name. The command reads no Pods, StatefulSets, or restores.
+
+JSON uses `schemaVersion: "v1"` with `resultCode`, `exitCode`, collection times, `target`, `allNamespaces`, `clusters`,
+and `collection`. Each cluster has `namespace`, `name`, `uid`, `observation`, and an optional `validationPath` when its
+normalized evidence was rejected. Normalized evidence is not included; use `status` for one cluster's full report.
+
+- `0`: the list completed, including an empty list.
+- `1`: invalid input, configuration or output failure, ambiguous discovery, or no served OpenBaoCluster API.
+- `3`: the list is incomplete, for example after a denied or limited read. Clusters that were read are still shown.
+
+List requires `list` on `openbaoclusters` in the selected namespace, or cluster-wide with `--all-namespaces`, plus the
+discovery access that status needs. Shell completion of cluster names uses the same namespaced read.
+
 ## Permissions
 
 Status requires named-resource `get` on `openbaoclusters` in the selected API group and namespace, plus access to its

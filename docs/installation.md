@@ -96,6 +96,33 @@ Upgrade with `kubectl krew upgrade kubebao`. Krew uses the same executable as th
 `kubectl kubebao`. Use downloads or Homebrew when the standalone `kubebao` command is required. Put kubeconfig and
 context flags after `kubectl kubebao` so that kubectl forwards them to the plugin.
 
+## Shell completion
+
+`kubebao completion bash|zsh|fish|powershell` prints a completion script. Load it in the shell profile:
+
+```sh
+source <(kubebao completion bash)                                   # ~/.bashrc
+kubebao completion zsh > "${fpath[1]}/_kubebao"                     # once, then restart zsh
+kubebao completion fish > ~/.config/fish/completions/kubebao.fish   # once
+```
+
+Completion suggests commands, flags, fixed flag values, kubeconfig contexts, and the cluster `NAME` argument. Names come
+from a bounded list of OpenBaoClusters in the namespace that the typed `--kubeconfig`, `--context`, `--namespace`, and
+`--api-group` flags select. The read uses a five-second timeout and needs `list` permission on `openbaoclusters`. A failed
+read suggests nothing; it never prints errors into the shell. Zsh and fish also show each cluster's OpenBao version and
+whether it is paused or in maintenance.
+
+For the kubectl plugin, kubectl 1.26 and newer completes plugin arguments through an executable named
+`kubectl_complete-kubebao` on `PATH`:
+
+```sh
+cat > ~/.local/bin/kubectl_complete-kubebao <<'SCRIPT'
+#!/usr/bin/env sh
+exec kubectl-kubebao __complete "$@"
+SCRIPT
+chmod +x ~/.local/bin/kubectl_complete-kubebao
+```
+
 ## Verify an installation
 
 Run `kubebao version --output json`, or `kubectl kubebao version --output json` for Krew. The result contains the CLI

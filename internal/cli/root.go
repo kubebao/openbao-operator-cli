@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -53,27 +54,35 @@ func newCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 			"It reads what the operator reports through the Kubernetes API, diagnoses common problems,\n" +
 			"packages evidence for support, and submits guarded pause, maintenance, and restart requests.\n" +
 			"It never reads Secrets or contacts OpenBao directly.",
-		Example: "  kubebao status prod -n security\n" +
+		Example: "  kubebao list -A\n" +
+			"  kubebao status prod -n security\n" +
 			"  kubebao doctor prod -n security\n" +
 			"  kubebao maintenance enable prod -n security --wait",
 		Version:       info.String(),
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		CompletionOptions: cobra.CompletionOptions{
-			DisableDefaultCmd: true,
-		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
+	// Subcommands use -v for --verbose, so --version has no shorthand.
+	root.Flags().Bool("version", false, "Print the kubebao version")
+	root.SetFlagErrorFunc(func(command *cobra.Command, err error) error {
+		if command == command.Root() && strings.Contains(err.Error(), "'v' in -v") {
+			return fmt.Errorf("%w; use --version for the version, or -v after a command for verbose output", err)
+		}
+		return err
+	})
 	term.addFlags(root)
 	root.AddGroup(
 		&cobra.Group{ID: groupInspect, Title: "Inspect and diagnose:"},
 		&cobra.Group{ID: groupControl, Title: "Control a cluster:"},
 	)
-	inspect := []*cobra.Command{newStatusCommand(info, term), newDoctorCommand(info, term), newBundleCommand(info, term)}
+	inspect := []*cobra.Command{
+		newListCommand(info, term), newStatusCommand(info, term), newDoctorCommand(info, term), newBundleCommand(info, term),
+	}
 	control := []*cobra.Command{
 		newPauseCommand(info, term, true), newPauseCommand(info, term, false), newMaintenanceCommand(info, term),
 		newRestartCommand(info, term),
@@ -116,5 +125,6 @@ func newVersionCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	command.Flags().StringVarP(&output, "output", "o", output, "Output format: text or json")
+	completeOutput(command)
 	return command
 }

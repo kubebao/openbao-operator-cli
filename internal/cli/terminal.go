@@ -35,6 +35,8 @@ func (t *terminal) stderr(command *cobra.Command) *render.Output {
 func (t *terminal) addFlags(root *cobra.Command) {
 	root.PersistentFlags().StringVar(&t.color, "color", string(render.ColorAuto),
 		"Use colour in text output: auto, always, or never; auto honours NO_COLOR")
+	_ = root.RegisterFlagCompletionFunc("color", cobra.FixedCompletions([]cobra.Completion{"auto", "always", "never"},
+		cobra.ShellCompDirectiveNoFileComp))
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {
 		_, err := render.ParseColorMode(t.color)
 		return err

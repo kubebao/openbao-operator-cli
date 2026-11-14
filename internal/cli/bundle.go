@@ -97,10 +97,12 @@ func newBundleCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 		},
 	}
 	addKubernetesFlags(command, &options)
+	addClusterArgument(command, &options)
 	addBackupAgeFlag(command, &maxBackupAge)
 	command.Flags().StringVar(&outputFile, "output-file", "", "Local archive destination (required)")
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "Replace an existing regular output file")
 	command.Flags().StringVarP(&output, "output", "o", output, "Result format: text or json")
+	completeOutput(command)
 	return command
 }
 
