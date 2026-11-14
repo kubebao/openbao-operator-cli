@@ -8,7 +8,7 @@ distribution without changing those settings. Publication and package-promotion 
 `.goreleaser.yaml` builds Linux and macOS binaries for amd64 and arm64. Each archive contains `kubebao`, the
 `kubectl_complete-kubebao` plugin completion helper, `LICENSE`, and `THIRD_PARTY_LICENSES`. Syft generates an SPDX 2.3 SBOM for each binary after any requested signing. GoReleaser also
 archives the committed source with its Git commit identity. The Homebrew formula builds that checksummed source on
-macOS or Linux. The Krew manifest references the four binary archives. The formula and Krew manifest record the
+macOS or Linux and installs `kubebao`, the `kubectl-kubebao` plugin symlink, and the plugin completion helper. The Krew manifest references the four binary archives. The formula and Krew manifest record the
 SHA-256 hashes of their respective archives.
 
 GoReleaser release publication and Krew uploads remain disabled in the configuration. Formula generation, `make dist`,

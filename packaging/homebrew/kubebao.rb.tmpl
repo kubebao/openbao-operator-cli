@@ -27,6 +27,9 @@ class Kubebao < Formula
       "-X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Commit=${commit}",
     ]
     system "go", "build", *std_go_args(ldflags: ldflags), "-mod=readonly", "./cmd/kubebao"
+    # kubectl discovers plugins by name; the same binary adapts its help to `kubectl kubebao`.
+    bin.install_symlink "kubebao" => "kubectl-kubebao"
+    bin.install "packaging/kubectl/kubectl_complete-kubebao"
     pkgshare.install "LICENSE", "THIRD_PARTY_LICENSES"
     generate_completions_from_executable(bin/"kubebao", shell_parameter_format: :cobra)
   end
@@ -39,6 +42,9 @@ class Kubebao < Formula
     assert_match "kubebao doctor", shell_output("#{bin}/kubebao doctor --help")
     assert_match "__start_kubebao", (bash_completion/"kubebao").read
     assert_match "compdef _kubebao kubebao", (zsh_completion/"_kubebao").read
+    assert_match "kubectl kubebao doctor", shell_output("#{bin}/kubectl-kubebao doctor --help")
+    ENV.prepend_path "PATH", bin
+    assert_match "enable\t", shell_output("#{bin}/kubectl_complete-kubebao maintenance ''")
     assert_match "Error: unknown command", shell_output("#{bin}/kubebao unknown-command 2>&1", 1)
   end
 end

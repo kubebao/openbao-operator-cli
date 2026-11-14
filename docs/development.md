@@ -59,8 +59,9 @@ The first invocation requires network access, `curl`, `tar`, and `shasum`. Packa
 
 The platforms are `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`. Each archive contains `kubebao`,
 the executable `kubectl_complete-kubebao` helper from `packaging/kubectl`, `LICENSE`, and `THIRD_PARTY_LICENSES` at its
-root. The Krew manifest's caveats explain how to put the helper on `PATH`; the Homebrew formula generates shell
-completions from the built binary. Each SPDX SBOM describes the compiled binary and records its hash.
+root. The Krew manifest's caveats explain how to put the helper on `PATH`. The Homebrew formula generates shell
+completions from the built binary and installs the `kubectl-kubebao` plugin symlink and the helper from the source
+archive. Each SPDX SBOM describes the compiled binary and records its hash.
 `dist/checksums.txt` covers all four binary archives, all four SBOMs, the source archive, and `release-info.json`.
 The latter records the build kind and Apple signing mode. Package metadata is generated at
 `dist/homebrew/Formula/kubebao.rb` and `dist/krew/kubebao.yaml`. The formula builds the checksummed source archive and
@@ -91,7 +92,8 @@ locked dependencies, then rebuilds and exercises the source archive with module 
 
 `make verify-homebrew` requires installed Homebrew 7 or newer and a compatible Go toolchain. It loads the generated
 formula through Homebrew, runs its dependency-fetch and build methods, and runs its functional test block with a minimal
-assertion harness. The test block checks the generated bash and zsh completions. It uses a
+assertion harness. The test block checks the generated bash and zsh completions, plugin help through
+`kubectl-kubebao`, and plugin completion through the installed helper. It uses a
 unique temporary tap directory, prefix, logs, and trust configuration; it does not register a tap or install a host
 package. This checks formula behavior with the selected Go toolchain, not Homebrew's dependency-installation or bottle
 workflows. Set `DIST_DIR=payload` on the verification targets to check a downloaded payload.

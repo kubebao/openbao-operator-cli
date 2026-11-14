@@ -70,7 +70,8 @@ def read_source(path, version, commit):
             size += member.size
             if len(names) > 4096 or size > 128 * 1024 * 1024:
                 raise ValueError("Source archive exceeds its entry or expanded size limit.")
-        required = {"go.mod", "go.sum", "LICENSE", "THIRD_PARTY_LICENSES", "cmd/kubebao/main.go"}
+        required = {"go.mod", "go.sum", "LICENSE", "THIRD_PARTY_LICENSES", "cmd/kubebao/main.go",
+                    f"packaging/kubectl/{COMPLETION_HELPER}"}
         if not {prefix + name for name in required}.issubset(names):
             raise ValueError("Source archive is missing build inputs or license notices.")
         if any(prefix + name in names for name in (".env", "go.work", "go.work.sum", ".git")):
@@ -121,6 +122,9 @@ def verify(directory, expected_kind=None, expected_signing=None):
         raise ValueError("Homebrew formula does not build the verified source archive.")
     if 'generate_completions_from_executable(bin/"kubebao", shell_parameter_format: :cobra)' not in formula:
         raise ValueError("Homebrew formula does not install shell completions.")
+    if ('bin.install_symlink "kubebao" => "kubectl-kubebao"' not in formula or
+            f'bin.install "packaging/kubectl/{COMPLETION_HELPER}"' not in formula):
+        raise ValueError("Homebrew formula does not install the kubectl plugin and its completion helper.")
     if f"store/kubebao/v{version}/{COMPLETION_HELPER}" not in krew:
         raise ValueError("Krew manifest does not explain how to enable plugin completion.")
     for target in PLATFORMS:

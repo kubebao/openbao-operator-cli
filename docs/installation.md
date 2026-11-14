@@ -77,6 +77,17 @@ Upgrade through the same tap:
 brew upgrade --formula kubebao/tap/kubebao
 ```
 
+The formula installs `kubebao`, the kubectl plugin `kubectl-kubebao` (a symlink to the same binary), and the
+`kubectl_complete-kubebao` completion helper, so `kubectl kubebao` works without Krew:
+
+```sh
+kubectl kubebao version
+kubectl kubebao status prod -n security --context production
+```
+
+Install the plugin through Homebrew or Krew, not both. kubectl uses the first `kubectl-kubebao` on `PATH`, and
+`kubectl plugin list` warns about the shadowed copy.
+
 The formula builds from the release's checksummed source archive on macOS or Linux. It installs Go as a build
 dependency and uses the module's locked dependencies. Use Homebrew 7 or newer and a Go formula that satisfies the
 version required by `go.mod`. The installed CLI does not need Go or an Apple Developer account. Building takes longer
@@ -93,7 +104,8 @@ kubectl kubebao status prod -n security --context production
 ```
 
 Upgrade with `kubectl krew upgrade kubebao`. Krew uses the same executable as the standalone CLI and exposes it as
-`kubectl kubebao`. Use downloads or Homebrew when the standalone `kubebao` command is required. Put kubeconfig and
+`kubectl kubebao`. Use downloads or Homebrew when the standalone `kubebao` command is required; Homebrew also installs
+the plugin, so do not install both. Put kubeconfig and
 context flags after `kubectl kubebao` so that kubectl forwards them to the plugin.
 
 ## Shell completion
@@ -112,7 +124,8 @@ from a bounded list of OpenBaoClusters in the namespace that the typed `--kubeco
 read suggests nothing; it never prints errors into the shell. Zsh and fish also show each cluster's OpenBao version and
 whether it is paused or in maintenance.
 
-Homebrew installs bash, zsh, fish, and PowerShell completions for `kubebao` automatically.
+Homebrew installs bash, zsh, fish, and PowerShell completions for `kubebao` automatically. It also installs
+`kubectl_complete-kubebao`, so `kubectl kubebao` completes without further setup.
 
 For the kubectl plugin, kubectl 1.26 and newer completes plugin arguments through an executable named
 `kubectl_complete-kubebao` on `PATH`. Every release archive contains this helper next to `kubebao`. It runs
