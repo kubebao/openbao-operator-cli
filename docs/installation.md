@@ -112,16 +112,19 @@ from a bounded list of OpenBaoClusters in the namespace that the typed `--kubeco
 read suggests nothing; it never prints errors into the shell. Zsh and fish also show each cluster's OpenBao version and
 whether it is paused or in maintenance.
 
-For the kubectl plugin, kubectl 1.26 and newer completes plugin arguments through an executable named
-`kubectl_complete-kubebao` on `PATH`:
+Homebrew installs bash, zsh, fish, and PowerShell completions for `kubebao` automatically.
 
-```sh
-cat > ~/.local/bin/kubectl_complete-kubebao <<'SCRIPT'
-#!/usr/bin/env sh
-exec kubectl-kubebao __complete "$@"
-SCRIPT
-chmod +x ~/.local/bin/kubectl_complete-kubebao
-```
+For the kubectl plugin, kubectl 1.26 and newer completes plugin arguments through an executable named
+`kubectl_complete-kubebao` on `PATH`. Every release archive contains this helper next to `kubebao`. It runs
+`kubectl-kubebao __complete` from `PATH`, so one copy keeps working across upgrades.
+
+- Krew extracts the helper but links only the plugin. Copy it once, as the post-install message shows:
+
+  ```sh
+  cp "${KREW_ROOT:-$HOME/.krew}/store/kubebao/v<version>/kubectl_complete-kubebao" "${KREW_ROOT:-$HOME/.krew}/bin/"
+  ```
+
+- For a direct download, install `kubectl_complete-kubebao` in the same `PATH` directory as `kubectl-kubebao`.
 
 ## Verify an installation
 

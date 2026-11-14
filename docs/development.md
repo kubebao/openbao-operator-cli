@@ -58,7 +58,9 @@ Linux/macOS amd64/arm64 tool archive.
 The first invocation requires network access, `curl`, `tar`, and `shasum`. Packaging verification requires Python 3.
 
 The platforms are `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`. Each archive contains `kubebao`,
-`LICENSE`, and `THIRD_PARTY_LICENSES` at its root. Each SPDX SBOM describes the compiled binary and records its hash.
+the executable `kubectl_complete-kubebao` helper from `packaging/kubectl`, `LICENSE`, and `THIRD_PARTY_LICENSES` at its
+root. The Krew manifest's caveats explain how to put the helper on `PATH`; the Homebrew formula generates shell
+completions from the built binary. Each SPDX SBOM describes the compiled binary and records its hash.
 `dist/checksums.txt` covers all four binary archives, all four SBOMs, the source archive, and `release-info.json`.
 The latter records the build kind and Apple signing mode. Package metadata is generated at
 `dist/homebrew/Formula/kubebao.rb` and `dist/krew/kubebao.yaml`. The formula builds the checksummed source archive and
@@ -78,7 +80,8 @@ details. No path changes quarantine attributes or disables Gatekeeper.
 
 `make verify-dist` checks checksums, archive entries, executable permissions, SBOM binary hashes and dependencies, and
 package versions and archive references. It executes the current host's archived binary with an absent kubeconfig.
-It checks standalone and plugin help, version JSON, and error exit codes. It installs the generated manifest and local
+It checks standalone and plugin help, version JSON, and error exit codes. It also runs the archived completion helper,
+and the copy in the temporary Krew store, against the plugin, and requires the helper to match `packaging/kubectl`. It installs the generated manifest and local
 archive into a temporary Krew root. If kubectl is on `PATH`, it also checks real kubectl plugin forwarding through that
 installation. Cross-compilation and these offline checks do not establish operator compatibility.
 
@@ -88,7 +91,7 @@ locked dependencies, then rebuilds and exercises the source archive with module 
 
 `make verify-homebrew` requires installed Homebrew 7 or newer and a compatible Go toolchain. It loads the generated
 formula through Homebrew, runs its dependency-fetch and build methods, and runs its functional test block with a minimal
-assertion harness. It uses a
+assertion harness. The test block checks the generated bash and zsh completions. It uses a
 unique temporary tap directory, prefix, logs, and trust configuration; it does not register a tap or install a host
 package. This checks formula behavior with the selected Go toolchain, not Homebrew's dependency-installation or bottle
 workflows. Set `DIST_DIR=payload` on the verification targets to check a downloaded payload.

@@ -57,9 +57,11 @@ kubebao completion zsh > "${fpath[1]}/_kubebao"
 kubebao completion fish > ~/.config/fish/completions/kubebao.fish
 ```
 
-Completion suggests commands, flag values, kubeconfig contexts, and cluster names. Cluster names come from a bounded
+Homebrew installs these completions automatically. Completion suggests commands, flag values, kubeconfig contexts, and
+cluster names. Cluster names come from a bounded
 `list` of the selected namespace with a five-second timeout; without list permission, names are not suggested. See
-[installation](docs/installation.md#shell-completion) for the kubectl plugin.
+[installation](docs/installation.md#shell-completion) for the kubectl plugin's `kubectl_complete-kubebao` helper,
+which ships in every release archive.
 
 ## Cluster status
 

@@ -28,12 +28,19 @@ archives:
     ids: [kubebao-linux]
     formats: [tar.gz]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
-    files: [LICENSE, THIRD_PARTY_LICENSES]
+    files: &archive_files
+      - LICENSE
+      - THIRD_PARTY_LICENSES
+      # kubectl 1.26+ runs this helper to complete `kubectl kubebao` arguments.
+      - src: packaging/kubectl/kubectl_complete-kubebao
+        strip_parent: true
+        info:
+          mode: 0755
   - id: kubebao-darwin
     ids: [kubebao-darwin]
     formats: [tar.gz]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
-    files: [LICENSE, THIRD_PARTY_LICENSES]
+    files: *archive_files
 
 source:
   enabled: true
@@ -84,6 +91,13 @@ krews:
       bundles, and submit guarded cluster controls through Kubernetes.
       Offline bundle diagnosis requires no Kubernetes connection.
     url_template: 'https://github.com/kubebao/openbao-operator-cli/releases/download/v{{ .Version }}/{{ .ArtifactName }}'
+    caveats: |
+      Shell completion for `kubectl kubebao` needs kubectl 1.26 or newer and the
+      kubectl_complete-kubebao helper on PATH. Krew does not link it; copy it once:
+
+        cp "${KREW_ROOT:-$HOME/.krew}/store/kubebao/v{{ .Version }}/kubectl_complete-kubebao" "${KREW_ROOT:-$HOME/.krew}/bin/"
+
+      The helper runs kubectl-kubebao from PATH, so the copy keeps working after upgrades.
     skip_upload: true
 
 # Developer ID signing and notarization are optional and disabled by default.

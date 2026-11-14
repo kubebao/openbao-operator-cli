@@ -13,6 +13,8 @@ import tarfile
 import tempfile
 
 PLATFORMS = ("linux_amd64", "linux_arm64", "darwin_amd64", "darwin_arm64")
+COMPLETION_HELPER = "kubectl_complete-kubebao"
+ARCHIVE_ENTRIES = {"kubebao", COMPLETION_HELPER, "LICENSE", "THIRD_PARTY_LICENSES"}
 
 
 def read_checksums(directory):
@@ -29,17 +31,24 @@ def read_checksums(directory):
     return checksums
 
 
-def read_archive(path):
+def completion_helper():
+    """Return the repository copy of the kubectl completion helper that every archive must ship unchanged."""
+    return (Path(__file__).resolve().parent.parent / "packaging/kubectl" / COMPLETION_HELPER).read_bytes()
+
+
+def read_archive(path, member_name="kubebao"):
     with tarfile.open(path, "r:gz") as archive:
         members = archive.getmembers()
-        if {member.name for member in members} != {"kubebao", "LICENSE", "THIRD_PARTY_LICENSES"} or len(members) != 3:
+        if {member.name for member in members} != ARCHIVE_ENTRIES or len(members) != len(ARCHIVE_ENTRIES):
             raise ValueError(f"Unexpected archive entries: {path.name}")
         if any(not member.isfile() or member.size > 128 * 1024 * 1024 for member in members):
             raise ValueError(f"Unsafe archive member: {path.name}")
-        binary = archive.getmember("kubebao")
-        if not binary.mode & 0o111:
-            raise ValueError(f"Binary is not executable: {path.name}")
-        return archive.extractfile(binary).read()
+        for name in ("kubebao", COMPLETION_HELPER):
+            if not archive.getmember(name).mode & 0o111:
+                raise ValueError(f"{name} is not executable: {path.name}")
+        if archive.extractfile(COMPLETION_HELPER).read() != completion_helper():
+            raise ValueError(f"Completion helper differs from packaging/kubectl: {path.name}")
+        return archive.extractfile(member_name).read()
 
 
 def read_source(path, version, commit):
@@ -110,6 +119,10 @@ def verify(directory, expected_kind=None, expected_signing=None):
             'system "go", "build"' not in formula or '"./cmd/kubebao"' not in formula or
             '.tar.gz' not in formula or 'cask "' in formula or 'com.apple.quarantine' in formula):
         raise ValueError("Homebrew formula does not build the verified source archive.")
+    if 'generate_completions_from_executable(bin/"kubebao", shell_parameter_format: :cobra)' not in formula:
+        raise ValueError("Homebrew formula does not install shell completions.")
+    if f"store/kubebao/v{version}/{COMPLETION_HELPER}" not in krew:
+        raise ValueError("Krew manifest does not explain how to enable plugin completion.")
     for target in PLATFORMS:
         name = f"kubebao_{version}_{target}.tar.gz"
         binary = read_archive(directory / name)
@@ -164,6 +177,9 @@ def smoke(directory, metadata, require_kubectl=False, check_krew=False):
         executable.chmod(0o755)
         plugin = Path(scratch) / "kubectl-kubebao"
         plugin.symlink_to(executable)
+        helper = Path(scratch) / COMPLETION_HELPER
+        helper.write_bytes(read_archive(directory / f"kubebao_{metadata['version']}_{target}.tar.gz", COMPLETION_HELPER))
+        helper.chmod(0o755)
         env = {**os.environ, "PATH": f"{scratch}{os.pathsep}{os.environ['PATH']}", "KUBECONFIG": f"{scratch}/absent"}
         commands = ([str(executable)], [str(plugin)])
         if check_krew:
@@ -192,10 +208,22 @@ def smoke(directory, metadata, require_kubectl=False, check_krew=False):
             expected = "kubectl kubebao doctor" if command != commands[0] else "kubebao doctor"
             if result.stderr or expected not in result.stdout:
                 raise ValueError("Invocation help does not match the executable name.")
+        completion_smoke(helper, env)
+        if check_krew:
+            completion_smoke(krew_root / f"store/kubebao/v{metadata['version']}/{COMPLETION_HELPER}", env)
         invalid = subprocess.run([str(plugin), "unknown-command"], env=env, capture_output=True, text=True, check=False)
         if invalid.returncode != 1 or invalid.stdout or "Error:" not in invalid.stderr:
             raise ValueError("Plugin error output or exit code is incorrect.")
     print(f"Verified archive execution on {target}; kubectl plugin exercised: {bool(kubectl)}.")
+
+
+def completion_smoke(helper, env):
+    """kubectl runs the helper with the words to complete; it must reach kubectl-kubebao on PATH."""
+    result = subprocess.run([str(helper), "maintenance", ""], env=env, capture_output=True, text=True, check=True)
+    lines = result.stdout.splitlines()
+    # Cobra always reports the directive on stderr for debugging; shells discard it.
+    if "Error" in result.stderr or not {"enable", "disable"}.issubset({line.split("\t")[0] for line in lines}) or lines[-1] != ":4":
+        raise ValueError(f"Completion helper did not complete plugin commands: {helper}")
 
 
 def main():
