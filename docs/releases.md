@@ -1,7 +1,8 @@
 # Release procedures
 
-The repository is private, GitHub Actions is disabled, and no release is published. This implementation prepares
-distribution without changing those settings. Publication and package-promotion gates default to disabled.
+The source-first opening provides source builds. No release is published. CI can validate the private repository
+without publishing artifacts. Publication and package-promotion gates remain false; making the source public does not
+open either gate. See [source publication](source-publication.md).
 
 ## Artifacts
 

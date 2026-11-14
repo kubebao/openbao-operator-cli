@@ -1,6 +1,7 @@
-.PHONY: install lint lint-fix test check build dist release-dist release-check verify-dist verify-homebrew vulncheck licenses check-licenses
+.PHONY: install lint lint-fix test check build dist release-dist release-check verify-dist verify-homebrew vulncheck licenses check-licenses secret-scan check-workflows
 
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+GITLEAKS = go run github.com/zricethezav/gitleaks/v8@v8.30.1
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || echo unknown)
@@ -15,6 +16,12 @@ install:
 lint:
 	$(GOLANGCI_LINT) run ./...
 
+secret-scan:
+	$(GITLEAKS) git --no-banner --redact=100 --log-opts="--all" --gitleaks-ignore-path=.gitleaksignore .
+
+check-workflows:
+	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
 lint-fix:
 	$(GOLANGCI_LINT) fmt ./...
 	$(GOLANGCI_LINT) run --fix ./...
@@ -22,7 +29,7 @@ lint-fix:
 test:
 	go test -race ./...
 
-check: lint test build
+check: lint test build check-workflows
 
 build:
 	mkdir -p bin

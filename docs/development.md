@@ -23,6 +23,8 @@
 | `make install` | Downloads Go module dependencies |
 | `make lint` | Runs pinned golangci-lint and configured formatting checks |
 | `make lint-fix` | Applies configured formatters and supported lint fixes |
+| `make secret-scan` | Scans reachable local Git history with pinned Gitleaks and redacted output |
+| `make check-workflows` | Validates GitHub Actions with pinned actionlint |
 | `make test` | Runs Go tests with the race detector |
 | `make check` | Runs lint, race tests, and the binary build |
 | `make build` | Builds `bin/kubebao` with version and commit metadata |
@@ -100,12 +102,11 @@ workflows. Set `DIST_DIR=payload` on the verification targets to check a downloa
 
 ## Continuous integration
 
-GitHub Actions is currently disabled during initial development. Run the Make checks locally before pushing changes.
-
-When Actions is enabled, the Check workflow runs on pull requests, pushes to `main`, and merge groups. It runs Go checks,
+The Check workflow supports manual runs, pull requests, pushes to `main`, and merge groups. It runs Go checks,
 vulnerability analysis,
 dependency notice verification, and four-platform archive builds and verification. Generated artifacts are retained as
-workflow artifacts. Ordinary checks never publish.
+workflow artifacts. It also scans reachable Git history for secrets and validates workflow definitions. Ordinary checks
+never publish. See [source publication](source-publication.md) for the separate visibility and publication controls.
 
 The manual Release workflow defaults to an unsigned rehearsal. Public publication requires a separate repository gate,
 immutable releases, and a protected environment. Apple signing is a separate opt-in. Its runtime matrix executes the

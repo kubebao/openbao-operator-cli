@@ -41,6 +41,8 @@ Resources
 Build from source with Go 1.27.4 or newer. With `GOTOOLCHAIN=auto`, Go downloads the required toolchain.
 
 ```sh
+git clone https://github.com/kubebao/openbao-operator-cli.git
+cd openbao-operator-cli
 make build
 ./bin/kubebao version
 ```
