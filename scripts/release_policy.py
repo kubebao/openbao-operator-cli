@@ -30,6 +30,12 @@ def validate_immutable(immutable):
         raise ValueError("Enable immutable releases before publication.")
 
 
+def apple_signing_mode(enabled):
+    if enabled not in ("true", "false"):
+        raise ValueError("KUBEBAO_NOTARIZE must be true or false.")
+    return "developer-id-notarized" if enabled == "true" else "none"
+
+
 def github(path):
     return json.loads(subprocess.check_output(["gh", "api", path], text=True))
 
@@ -37,6 +43,7 @@ def github(path):
 def main():
     tag = sys.argv[1]
     validate_tag(tag)
+    apple_signing_mode(os.environ.get("KUBEBAO_NOTARIZE", "false"))
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("Dispatch the release workflow from main.")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

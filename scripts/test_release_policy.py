@@ -6,10 +6,17 @@ from unittest import mock
 import release_policy
 import publish_release
 import promote_packages
-from release_policy import validate_immutable, validate_publication, validate_tag
+from release_policy import apple_signing_mode, validate_immutable, validate_publication, validate_tag
 
 
 class ReleasePolicyTests(unittest.TestCase):
+    def test_apple_signing_is_an_explicit_boolean(self):
+        self.assertEqual(apple_signing_mode("false"), "none")
+        self.assertEqual(apple_signing_mode("true"), "developer-id-notarized")
+        for invalid in (None, "", "True", "yes", "auto"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                apple_signing_mode(invalid)
+
     def test_publisher_without_opt_in_does_not_call_external_tools(self):
         with mock.patch.dict("os.environ", {}, clear=True), \
              mock.patch("sys.argv", ["publish_release.py", "v0.1.0", "payload"]), \

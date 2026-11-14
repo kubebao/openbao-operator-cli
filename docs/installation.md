@@ -21,6 +21,11 @@ Release archives target Linux and macOS on amd64 and arm64. Select the archive t
 releases include `checksums.txt`, one SPDX SBOM per binary, and a build-provenance bundle. The CLI has its own version;
 the release notes identify tested operator versions and capabilities.
 
+Apple Developer ID signing and notarization are optional. Check `appleSigning` in the checksummed `release-info.json`:
+`none` means the binaries have no Developer ID signing or notarization from this release process;
+`developer-id-notarized` means that the release requested and verified both. The release also includes a checksummed
+source archive for source builds. Build provenance and Apple notarization are separate checks.
+
 After the selected release is published, download its files with the GitHub CLI. This example selects Linux/amd64:
 
 ```sh
@@ -48,6 +53,11 @@ install -m 0755 kubebao "$HOME/.local/bin/kubebao"
 
 Add `$HOME/.local/bin` to `PATH` if necessary. Keep the license notices with any redistributed archive.
 
+On macOS, Gatekeeper can block a downloaded binary without Developer ID signing or notarization. If this happens,
+use the source-building Homebrew formula or build from source. The installers do not remove quarantine attributes
+or disable Gatekeeper. Startup tests on extracted archives do not qualify every browser-download or managed-device
+policy path.
+
 For an internal mirror, retain the original archives, checksums, SBOMs, and provenance bundle. Offline attestation
 verification also needs trusted verification material. Follow GitHub's
 [offline verification procedure](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline).
@@ -57,18 +67,20 @@ verification also needs trusted verification material. Follow GitHub's
 After the official tap contains the stable release:
 
 ```sh
-brew install --cask kubebao/tap/kubebao
+brew install --formula kubebao/tap/kubebao
 kubebao version
 ```
 
 Upgrade through the same tap:
 
 ```sh
-brew upgrade --cask kubebao/tap/kubebao
+brew upgrade --formula kubebao/tap/kubebao
 ```
 
-The cask installs the signed macOS release binary. It does not remove quarantine attributes or disable Gatekeeper.
-Use a direct versioned download when an automation job requires an exact version.
+The formula builds from the release's checksummed source archive on macOS or Linux. It installs Go as a build
+dependency and uses the module's locked dependencies. Use Homebrew 7 or newer and a Go formula that satisfies the
+version required by `go.mod`. The installed CLI does not need Go or an Apple Developer account. Building takes longer
+than installing a precompiled archive. Use a direct versioned download when an automation job requires an exact version.
 
 ## Krew
 

@@ -31,6 +31,7 @@
 | `make release-dist` | Builds artifacts from a clean version tag without publishing |
 | `make release-check` | Checks GoReleaser configuration and release safety tests |
 | `make verify-dist` | Verifies artifact contents and exercises the current host's archive |
+| `make verify-homebrew` | Runs the source formula's build and functional tests in a temporary prefix |
 
 The module requires Go 1.27.4. With `GOTOOLCHAIN=auto`, the Go command selects a compatible toolchain. The Makefile pins
 golangci-lint to `v2.14.0`, govulncheck to `v1.9.0`, and go-licenses to `v2.0.1`.
@@ -56,19 +57,39 @@ The first invocation requires network access, `curl`, `tar`, and `shasum`. Packa
 
 The platforms are `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`. Each archive contains `kubebao`,
 `LICENSE`, and `THIRD_PARTY_LICENSES` at its root. Each SPDX SBOM describes the compiled binary and records its hash.
-`dist/checksums.txt` covers all four archives and all four SBOMs. Package metadata is generated at
-`dist/homebrew/Casks/kubebao.rb` and `dist/krew/kubebao.yaml`. Snapshot URLs describe proposed artifacts; no corresponding
+`dist/checksums.txt` covers all four binary archives, all four SBOMs, the source archive, and `release-info.json`.
+The latter records the build kind and Apple signing mode. Package metadata is generated at
+`dist/homebrew/Formula/kubebao.rb` and `dist/krew/kubebao.yaml`. The formula builds the checksummed source archive and
+embeds the release version and commit. Snapshot URLs describe proposed artifacts; no corresponding
 release exists. `make dist` replaces `dist/` and never publishes.
 
 `DIST_VERSION` must be a semantic prerelease version. Distribution builds embed the actual source commit; `COMMIT`
-overrides apply only to `make build`. Snapshot builds can include uncommitted changes and do not qualify as release
-builds. GoReleaser, Homebrew, and Krew publication are disabled in `.goreleaser.yaml`.
+overrides apply only to `make build`. Snapshot binaries can include uncommitted changes. GoReleaser's source archive
+always contains the committed revision, so dirty snapshots can have different binary and source content. Use a clean
+tagged checkout for release qualification. GoReleaser publication and Krew uploads are disabled in `.goreleaser.yaml`;
+formula generation does not update the Homebrew tap.
+
+Tagged builds are also unsigned by default. Set `KUBEBAO_NOTARIZE=true` only when a tagged build must use the Apple
+credentials described in [release procedures](releases.md). Invalid values are rejected. Snapshot builds reject signing.
+Here, Apple signing means Developer ID signing and notarization; it does not describe Go's platform-specific code-signing
+details. No path changes quarantine attributes or disables Gatekeeper.
 
 `make verify-dist` checks checksums, archive entries, executable permissions, SBOM binary hashes and dependencies, and
 package versions and archive references. It executes the current host's archived binary with an absent kubeconfig.
 It checks standalone and plugin help, version JSON, and error exit codes. It installs the generated manifest and local
 archive into a temporary Krew root. If kubectl is on `PATH`, it also checks real kubectl plugin forwarding through that
 installation. Cross-compilation and these offline checks do not establish operator compatibility.
+
+The verifier also checks the source archive's Git commit, entry bounds, required inputs, formula checksum reference,
+and requested signing mode. It selects the compatible Go toolchain already selected by the repository, downloads
+locked dependencies, then rebuilds and exercises the source archive with module proxy access disabled during compilation.
+
+`make verify-homebrew` requires installed Homebrew 7 or newer and a compatible Go toolchain. It loads the generated
+formula through Homebrew, runs its dependency-fetch and build methods, and runs its functional test block with a minimal
+assertion harness. It uses a
+unique temporary tap directory, prefix, logs, and trust configuration; it does not register a tap or install a host
+package. This checks formula behavior with the selected Go toolchain, not Homebrew's dependency-installation or bottle
+workflows. Set `DIST_DIR=payload` on the verification targets to check a downloaded payload.
 
 ## Continuous integration
 
@@ -79,9 +100,10 @@ vulnerability analysis,
 dependency notice verification, and four-platform archive builds and verification. Generated artifacts are retained as
 workflow artifacts. Ordinary checks never publish.
 
-The manual Release workflow defaults to a rehearsal. Public publication requires a separate repository gate, signing
-credentials, immutable releases, and a protected environment. Its runtime matrix executes the same archived binaries
-on all four platforms. Package promotion has a separate gate and opens PRs without merging them. These workflows do
+The manual Release workflow defaults to an unsigned rehearsal. Public publication requires a separate repository gate,
+immutable releases, and a protected environment. Apple signing is a separate opt-in. Its runtime matrix executes the
+same archived binaries and rebuilds the source on all four platforms; macOS jobs also exercise the formula.
+Package promotion has a separate gate and opens PRs without merging them. These workflows do
 not run while Actions remains disabled. See [release procedures](releases.md).
 
 Actions are pinned to commit SHAs. Dependabot proposes weekly Go and GitHub Actions updates.

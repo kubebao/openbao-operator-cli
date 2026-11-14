@@ -14,7 +14,7 @@ def main():
     destination = directory / "release"
     destination.mkdir()  # Fail rather than combine artifacts from separate runs.
     paths = [directory / name for name in read_checksums(directory)]
-    paths += [directory / "metadata.json", directory / "homebrew/Casks/kubebao.rb", directory / "krew/kubebao.yaml"]
+    paths += [directory / "metadata.json", directory / "homebrew/Formula/kubebao.rb", directory / "krew/kubebao.yaml"]
     checksums = []
     for path in sorted(paths, key=lambda item: item.name):
         shutil.copyfile(path, destination / path.name)

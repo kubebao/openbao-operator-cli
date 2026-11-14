@@ -106,7 +106,8 @@ make verify-dist
 ```
 
 This uses pinned GoReleaser and Syft binaries to build archives for Linux and macOS on amd64 and arm64. It also writes
-SPDX SBOMs, license notices, SHA-256 checksums, a Homebrew cask, and a Krew manifest. It does not publish a release or
+SPDX SBOMs, a source archive, license notices, SHA-256 checksums, a source-building Homebrew formula, and a Krew manifest.
+Apple Developer ID signing and notarization are optional and disabled by default. This command does not publish a release or
 update package repositories. Verify the checksums from the archive directory:
 
 ```sh

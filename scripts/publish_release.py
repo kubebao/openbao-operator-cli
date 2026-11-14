@@ -18,7 +18,8 @@ def main():
         raise ValueError("Publication was not requested.")
     release_policy.main()
     directory = Path(path)
-    metadata = verify(directory)
+    metadata = verify(directory, expected_kind="release", expected_signing=release_policy.apple_signing_mode(
+        os.environ.get("KUBEBAO_NOTARIZE", "false")))
     if metadata["version"] != release_policy.validate_tag(tag):
         raise ValueError("Artifacts do not match the release tag.")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

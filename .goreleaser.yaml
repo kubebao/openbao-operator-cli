@@ -35,6 +35,12 @@ archives:
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     files: [LICENSE, THIRD_PARTY_LICENSES]
 
+source:
+  enabled: true
+  format: tar.gz
+  name_template: '{{ .ProjectName }}_{{ .Version }}_source'
+  prefix_template: '{{ .ProjectName }}_{{ .Version }}_source/'
+
 sboms:
   - id: binaries
     artifacts: binary
@@ -65,20 +71,6 @@ release:
 changelog:
   disable: true
 
-homebrew_casks:
-  - name: kubebao
-    ids: [kubebao-darwin]
-    repository:
-      owner: kubebao
-      name: homebrew-tap
-    directory: Casks
-    homepage: https://github.com/kubebao/openbao-operator-cli
-    description: Companion CLI for the OpenBao Operator
-    binaries: [kubebao]
-    url:
-      template: 'https://github.com/kubebao/openbao-operator-cli/releases/download/v{{ .Version }}/{{ .ArtifactName }}'
-    skip_upload: true
-
 krews:
   - name: kubebao
     ids: [kubebao-linux, kubebao-darwin]
@@ -94,8 +86,8 @@ krews:
     url_template: 'https://github.com/kubebao/openbao-operator-cli/releases/download/v{{ .Version }}/{{ .ArtifactName }}'
     skip_upload: true
 
-# Local snapshots are unsigned. Public release builds require these credentials
-# and enable notarization before archives, SBOMs, and checksums are generated.
+# Developer ID signing and notarization are optional and disabled by default.
+# When requested, they finish before archives, SBOMs, and checksums are generated.
 notarize:
   macos:
     - ids: [kubebao-darwin]

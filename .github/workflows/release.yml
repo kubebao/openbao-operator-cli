@@ -12,6 +12,10 @@ on:
         description: Publish after approval (requires CLI_RELEASES_ENABLED=true and a public repository)
         default: false
         type: boolean
+      apple_signing:
+        description: Sign and notarize macOS binaries (requires Apple credentials)
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -24,7 +28,7 @@ jobs:
   build:
     if: ${{ github.ref == 'refs/heads/main' && (!inputs.publish || (vars.CLI_RELEASES_ENABLED == 'true' && !github.event.repository.private)) }}
     runs-on: ubuntu-24.04
-    environment: ${{ inputs.publish && 'release' || 'release-rehearsal' }}
+    environment: ${{ (inputs.publish || inputs.apple_signing) && 'release' || 'release-rehearsal' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +42,7 @@ jobs:
           TAG: ${{ inputs.tag }}
           KUBEBAO_PUBLISH: ${{ inputs.publish }}
           CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
+          KUBEBAO_NOTARIZE: ${{ inputs.apple_signing }}
         run: python3 scripts/release_policy.py "$TAG"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -45,12 +50,17 @@ jobs:
       - name: Validate source and packaging
         run: make check vulncheck check-licenses release-check
       - name: Build rehearsal artifacts
-        if: ${{ !inputs.publish }}
+        if: ${{ !inputs.publish && !inputs.apple_signing }}
         env:
           TAG: ${{ inputs.tag }}
         run: make dist DIST_VERSION="${TAG#v}-rehearsal"
-      - name: Build signed release artifacts
-        if: ${{ inputs.publish }}
+      - name: Build unsigned release artifacts
+        if: ${{ inputs.publish && !inputs.apple_signing }}
+        env:
+          KUBEBAO_NOTARIZE: "false"
+        run: make release-dist
+      - name: Build signed artifacts
+        if: ${{ inputs.apple_signing }}
         env:
           KUBEBAO_NOTARIZE: "true"
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
@@ -87,10 +97,19 @@ jobs:
         with:
           name: cli-release-payload
           path: payload
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - name: Verify native executable and plugin entry point
-        run: python3 scripts/verify_dist.py payload --smoke --krew
+        env:
+          SIGNING: ${{ inputs.apple_signing && 'developer-id-notarized' || 'none' }}
+          KIND: ${{ (inputs.publish || inputs.apple_signing) && 'release' || 'snapshot' }}
+        run: python3 scripts/verify_dist.py payload --smoke --krew --source-build --expect-signing "$SIGNING" --expect-kind "$KIND"
+      - name: Verify source formula build and tests
+        if: ${{ runner.os == 'macOS' }}
+        run: make verify-homebrew DIST_DIR=payload
       - name: Verify Apple signature and notarization
-        if: ${{ inputs.publish && runner.os == 'macOS' }}
+        if: ${{ inputs.apple_signing && runner.os == 'macOS' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -139,4 +158,5 @@ jobs:
           TAG: ${{ inputs.tag }}
           KUBEBAO_PUBLISH: "true"
           CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
+          KUBEBAO_NOTARIZE: ${{ inputs.apple_signing }}
         run: python3 scripts/publish_release.py "$TAG" payload

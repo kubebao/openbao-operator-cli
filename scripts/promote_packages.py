@@ -55,7 +55,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="kubebao-promotion-") as scratch:
         payload = Path(scratch)
         subprocess.run(["gh", "release", "download", tag, "--repo", "kubebao/openbao-operator-cli", "--dir", scratch], check=True)
-        metadata = verify(payload)
+        metadata = verify(payload, expected_kind="release")
         if metadata["version"] != tag[1:]:
             raise ValueError("Package metadata does not match the release tag.")
         subprocess.run(["gh", "attestation", "verify", str(payload / "checksums.txt"),
@@ -63,7 +63,7 @@ def main():
                         "--signer-workflow", "kubebao/openbao-operator-cli/.github/workflows/release.yml"], check=True)
         # The two PRs have independent reviews and are never merged by this script.
         if channel in ("both", "homebrew"):
-            update_package("kubebao/homebrew-tap", "Casks/kubebao.rb", payload / "kubebao.rb", tag)
+            update_package("kubebao/homebrew-tap", "Formula/kubebao.rb", payload / "kubebao.rb", tag)
         if channel in ("both", "krew"):
             update_package("kubebao/krew-index", "plugins/kubebao.yaml", payload / "kubebao.yaml", tag,
                            upstream="kubernetes-sigs/krew-index")

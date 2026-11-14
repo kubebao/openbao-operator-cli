@@ -2,15 +2,65 @@
 
 import hashlib
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
 
-from verify_dist import read_archive, read_checksums
+from prepare_distribution import render_formula
+from verify_dist import read_archive, read_checksums, read_release_info, read_source
 
 
 class DistributionTests(unittest.TestCase):
+    def test_signing_metadata_must_match_the_requested_mode_and_commit(self):
+        metadata = {"version": "0.1.0", "commit": "a" * 40}
+        info = {"schemaVersion": "v1", "kind": "release", **metadata, "appleSigning": "none",
+                "sourceArchive": "kubebao_0.1.0_source.tar.gz"}
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            path = root / "release-info.json"
+            path.write_text(json.dumps(info), encoding="utf-8")
+            read_release_info(root, metadata, "release", "none")
+            with self.assertRaises(ValueError):
+                read_release_info(root, metadata, "release", "developer-id-notarized")
+            info["appleSigning"] = "developer-id-notarized"
+            path.write_text(json.dumps(info), encoding="utf-8")
+            read_release_info(root, metadata, "release", "developer-id-notarized")
+            with self.assertRaises(ValueError):
+                read_release_info(root, metadata, "release", "none")
+            info["kind"] = "snapshot"
+            path.write_text(json.dumps(info), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                read_release_info(root, metadata)
+            info.update(kind="release", commit="b" * 40)
+            path.write_text(json.dumps(info), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                read_release_info(root, metadata)
+
+    def test_source_archive_rejects_wrong_commit_and_unsafe_paths(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            path = Path(scratch) / "source.tar.gz"
+            for commit, name in (("b" * 40, "kubebao_0.1.0_source/go.mod"),
+                                 ("a" * 40, "kubebao_0.1.0_source/../../escape")):
+                with tarfile.open(path, "w:gz", pax_headers={"comment": commit}) as archive:
+                    member = tarfile.TarInfo(name)
+                    member.size = 1
+                    archive.addfile(member, io.BytesIO(b"x"))
+                with self.subTest(commit=commit, name=name), self.assertRaises(ValueError):
+                    read_source(path, "0.1.0", "a" * 40)
+
+    def test_source_formula_rejects_values_that_can_inject_ruby(self):
+        template = (Path(__file__).resolve().parent.parent / "packaging/homebrew/kubebao.rb.tmpl").read_text(encoding="utf-8")
+        formula = render_formula(template, "0.1.0", "a" * 40, "b" * 64)
+        self.assertIn("kubebao_0.1.0_source.tar.gz", formula)
+        self.assertIn('depends_on "go" => :build', formula)
+        self.assertNotIn("cask ", formula)
+        for version, commit, digest in (("0.1.0\"; system 'bad'", "a" * 40, "b" * 64),
+                                        ("0.1.0", '"', "b" * 64), ("0.1.0", "a" * 40, '"')):
+            with self.subTest(version=version, commit=commit, digest=digest), self.assertRaises(ValueError):
+                render_formula(template, version, commit, digest)
+
     def test_checksum_rejects_changes_and_unsafe_paths(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)

@@ -4,7 +4,7 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import re
 import shutil
@@ -42,25 +42,79 @@ def read_archive(path):
         return archive.extractfile(binary).read()
 
 
-def verify(directory):
+def read_source(path, version, commit):
+    if path.stat().st_size > 64 * 1024 * 1024:
+        raise ValueError("Source archive exceeds the compressed size limit.")
+    prefix = f"kubebao_{version}_source/"
+    with tarfile.open(path, "r:gz") as archive:
+        if archive.pax_headers.get("comment") != commit:
+            raise ValueError("Source archive does not identify the build commit.")
+        names = set()
+        size = 0
+        for member in archive:
+            parts = PurePosixPath(member.name).parts
+            if (member.name.startswith("/") or ".." in parts or
+                    not (member.name == prefix[:-1] or member.name.startswith(prefix)) or
+                    not (member.isdir() or member.isfile()) or member.name in names):
+                raise ValueError("Unsafe or duplicate source archive entry.")
+            names.add(member.name)
+            size += member.size
+            if len(names) > 4096 or size > 128 * 1024 * 1024:
+                raise ValueError("Source archive exceeds its entry or expanded size limit.")
+        required = {"go.mod", "go.sum", "LICENSE", "THIRD_PARTY_LICENSES", "cmd/kubebao/main.go"}
+        if not {prefix + name for name in required}.issubset(names):
+            raise ValueError("Source archive is missing build inputs or license notices.")
+        if any(prefix + name in names for name in (".env", "go.work", "go.work.sum", ".git")):
+            raise ValueError("Source archive includes local development state.")
+        return archive.extractfile(prefix + "go.mod").read().decode("utf-8")
+
+
+def read_release_info(directory, metadata, expected_kind=None, expected_signing=None):
+    info = json.loads((directory / "release-info.json").read_text(encoding="utf-8"))
+    if (info.get("schemaVersion") != "v1" or info.get("kind") not in ("snapshot", "release") or
+            info.get("appleSigning") not in ("none", "developer-id-notarized") or
+            info.get("version") != metadata["version"] or info.get("commit") != metadata["commit"] or
+            info.get("sourceArchive") != f"kubebao_{metadata['version']}_source.tar.gz"):
+        raise ValueError("Invalid distribution identity or signing metadata.")
+    if info["kind"] == "snapshot" and info["appleSigning"] != "none":
+        raise ValueError("Snapshot metadata must not claim Apple signing.")
+    if expected_kind is not None and info["kind"] != expected_kind:
+        raise ValueError("Distribution kind does not match the requested build.")
+    if expected_signing is not None and info["appleSigning"] != expected_signing:
+        raise ValueError("Apple signing mode does not match the requested build.")
+    return info
+
+
+def verify(directory, expected_kind=None, expected_signing=None):
     metadata = json.loads((directory / "metadata.json").read_text(encoding="utf-8"))
     version = metadata["version"]
     checksums = read_checksums(directory)
+    read_release_info(directory, metadata, expected_kind, expected_signing)
     expected = {f"kubebao_{version}_{target}.{suffix}" for target in PLATFORMS for suffix in ("tar.gz", "spdx.json")}
+    source = f"kubebao_{version}_source.tar.gz"
+    expected |= {source, "release-info.json"}
     staged = (directory / "kubebao.yaml").is_file()
     if staged:
         expected |= {"metadata.json", "kubebao.yaml", "kubebao.rb"}
     if set(checksums) != expected:
         raise ValueError("Unexpected distribution checksum entries.")
     krew = (directory / ("kubebao.yaml" if staged else "krew/kubebao.yaml")).read_text(encoding="utf-8")
-    cask = (directory / ("kubebao.rb" if staged else "homebrew/Casks/kubebao.rb")).read_text(encoding="utf-8")
-    if f"version: v{version}\n" not in krew or f'version "{version}"' not in cask:
+    formula = (directory / ("kubebao.rb" if staged else "homebrew/Formula/kubebao.rb")).read_text(encoding="utf-8")
+    if f"version: v{version}\n" not in krew or f'version "{version}"' not in formula:
         raise ValueError("Package version does not match the build version.")
+    read_source(directory / source, version, metadata["commit"])
+    source_url = f'https://github.com/kubebao/openbao-operator-cli/releases/download/v{version}/{source}'
+    if (f'url "{source_url}"' not in formula or f'sha256 "{checksums[source]}"' not in formula or
+            f'internal/buildinfo.Commit={metadata["commit"]}' not in formula or
+            'class Kubebao < Formula' not in formula or 'depends_on "go" => :build' not in formula or
+            'system "go", "build"' not in formula or '"./cmd/kubebao"' not in formula or
+            '.tar.gz' not in formula or 'cask "' in formula or 'com.apple.quarantine' in formula):
+        raise ValueError("Homebrew formula does not build the verified source archive.")
     for target in PLATFORMS:
         name = f"kubebao_{version}_{target}.tar.gz"
         binary = read_archive(directory / name)
         url = f"https://github.com/kubebao/openbao-operator-cli/releases/download/v{version}/{name}"
-        if url not in krew or checksums[name] not in krew or (target.startswith("darwin_") and checksums[name] not in cask):
+        if url not in krew or checksums[name] not in krew:
             raise ValueError(f"Package metadata does not reference the archive: {name}")
         sbom = json.loads((directory / f"kubebao_{version}_{target}.spdx.json").read_text(encoding="utf-8"))
         names = {package["name"] for package in sbom.get("packages", [])}
@@ -72,6 +126,31 @@ def verify(directory):
         if binary_digest not in digests:
             raise ValueError(f"SBOM does not describe the archived executable: {target}")
     return metadata
+
+
+def source_smoke(directory, metadata):
+    source = directory / f"kubebao_{metadata['version']}_source.tar.gz"
+    read_source(source, metadata["version"], metadata["commit"])
+    with tempfile.TemporaryDirectory(prefix="kubebao-source-") as scratch:
+        with tarfile.open(source, "r:gz") as archive:
+            archive.extractall(scratch, filter="data")
+        root = Path(scratch) / f"kubebao_{metadata['version']}_source"
+        binary = Path(scratch) / "kubebao"
+        goroot = subprocess.check_output(["go", "env", "GOROOT"], text=True).strip()
+        go = str(Path(goroot) / "bin/go")
+        env = {**os.environ, "GOWORK": "off", "CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "KUBECONFIG": f"{scratch}/absent"}
+        buildinfo = "github.com/kubebao/openbao-operator-cli/internal/buildinfo"
+        ldflags = f"-s -w -X {buildinfo}.Version=v{metadata['version']} -X {buildinfo}.Commit={metadata['commit']}"
+        subprocess.run([go, "mod", "download"], cwd=root, env=env, check=True)
+        env["GOPROXY"] = "off"
+        subprocess.run([go, "build", "-mod=readonly", "-trimpath", "-ldflags", ldflags,
+                        "-o", str(binary), "./cmd/kubebao"], cwd=root, env=env, check=True)
+        result = subprocess.run([str(binary), "version", "--output", "json"], env=env, capture_output=True, text=True, check=True)
+        info = json.loads(result.stdout)
+        if result.stderr or info["version"] != f"v{metadata['version']}" or info["commit"] != metadata["commit"]:
+            raise ValueError("Source build does not report the expected version and commit.")
+        subprocess.run([str(binary), "doctor", "--help"], env=env, check=True, stdout=subprocess.DEVNULL)
+    print("Built and exercised the checksummed source archive without Apple credentials.")
 
 
 def smoke(directory, metadata, require_kubectl=False, check_krew=False):
@@ -125,11 +204,16 @@ def main():
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--require-kubectl", action="store_true")
     parser.add_argument("--krew", action="store_true", help="Install the manifest and local archive into a temporary Krew root")
+    parser.add_argument("--source-build", action="store_true", help="Build and exercise the checksummed source archive")
+    parser.add_argument("--expect-signing", choices=("none", "developer-id-notarized"))
+    parser.add_argument("--expect-kind", choices=("snapshot", "release"))
     args = parser.parse_args()
-    metadata = verify(args.directory)
+    metadata = verify(args.directory, args.expect_kind, args.expect_signing)
     if args.smoke or args.require_kubectl:
         smoke(args.directory, metadata, args.require_kubectl, args.krew)
-    print("Verified four archives, four SPDX SBOMs, checksums, and package metadata.")
+    if args.source_build:
+        source_smoke(args.directory, metadata)
+    print("Verified binary and source archives, four SPDX SBOMs, signing metadata, checksums, and packages.")
 
 
 if __name__ == "__main__":
