@@ -14,6 +14,7 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/buildinfo"
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-cli/internal/render"
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
@@ -177,9 +178,14 @@ func (b Bundle) entries() (map[string][]byte, error) {
 		result = "incomplete"
 	}
 	var summary bytes.Buffer
-	fmt.Fprintf(&summary, "Captured evidence: %s to %s\nCollection: %s\n",
-		b.Manifest.StartedAt.Format(time.RFC3339Nano), b.Manifest.CompletedAt.Format(time.RFC3339Nano), b.Manifest.CollectionResult)
-	if err := doctor.WriteText(&summary, report, result, true); err != nil {
+	// The summary is a file: it never contains terminal escape sequences.
+	plain := render.Plain(&summary)
+	if _, err := fmt.Fprintf(plain, "Support bundle summary\nCaptured %s to %s · the cluster %s\n\n",
+		b.Manifest.StartedAt.Format(time.RFC3339Nano), b.Manifest.CompletedAt.Format(time.RFC3339Nano),
+		render.TargetResult(b.Manifest.CollectionResult)); err != nil {
+		return nil, err
+	}
+	if err := doctor.WriteText(plain, report, result, doctor.TextOptions{Verbose: true, Offline: true}); err != nil {
 		return nil, err
 	}
 	entries := map[string][]byte{"summary.txt": summary.Bytes()}

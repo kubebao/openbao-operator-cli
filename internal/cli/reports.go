@@ -9,6 +9,7 @@ import (
 
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-cli/internal/render"
 	"github.com/kubebao/openbao-operator-cli/internal/status"
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
@@ -93,33 +94,31 @@ func writeJSON(writer io.Writer, value any) error {
 	return nil
 }
 
-func writeStatus(writer io.Writer, report statusReport, output string, verbose bool) error {
-	if output == "json" {
-		return writeJSON(writer, report)
+func writeStatus(output *render.Output, report statusReport, format string, verbose bool) error {
+	if format == "json" {
+		return writeJSON(output.Unstyled(), report)
 	}
-	if err := status.WriteText(writer, report.Snapshot, verbose, report.ExitCode == 3); err != nil {
-		return err
-	}
-	if report.ValidationPath != "" {
-		if _, err := fmt.Fprintf(writer, "Validation field: %s\n", report.ValidationPath); err != nil {
-			return fmt.Errorf("write validation field: %w", err)
-		}
-	}
-	return nil
+	return status.WriteText(output, report.Snapshot, status.TextOptions{
+		Verbose: verbose, Incomplete: report.ExitCode == 3, ValidationPath: report.ValidationPath, Width: output.Width(),
+	})
 }
 
-func writeDiagnostic(writer io.Writer, report diagnosticReport, output string, verbose bool) error {
-	if output == "json" {
-		return writeJSON(writer, report)
+func writeWatchHeader(output *render.Output, interval time.Duration) error {
+	if err := output.ClearScreen(); err != nil {
+		return err
 	}
-	if report.Source == "bundle" {
-		if _, err := fmt.Fprintf(writer, "Offline analysis: captured %s to %s; reference time %s\n",
-			report.Evidence.StartedAt.Format(time.RFC3339Nano), report.Evidence.CompletedAt.Format(time.RFC3339Nano),
-			report.AnalysisTime.Format(time.RFC3339Nano)); err != nil {
-			return fmt.Errorf("write offline analysis times: %w", err)
-		}
+	_, err := output.WriteString(render.Faint(fmt.Sprintf("Every %s · %s · Ctrl+C to stop", interval,
+		time.Now().Format(time.TimeOnly))) + "\n\n")
+	return err
+}
+
+func writeDiagnostic(output *render.Output, report diagnosticReport, format string, verbose bool) error {
+	if format == "json" {
+		return writeJSON(output.Unstyled(), report)
 	}
-	return doctor.WriteText(writer, report.Report, report.ResultCode, verbose)
+	return doctor.WriteText(output, report.Report, report.ResultCode, doctor.TextOptions{
+		Verbose: verbose, Offline: report.Source == "bundle", Width: output.Width(),
+	})
 }
 
 func makeStatusReport(snapshot evidence.Snapshot) statusReport {

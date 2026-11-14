@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/collect"
 	"github.com/kubebao/openbao-operator-cli/internal/doctor"
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-cli/internal/render"
 )
 
 type bundleResult struct {
@@ -26,16 +28,20 @@ type bundleResult struct {
 	ExitCode           int    `json:"exitCode"`
 }
 
-func newBundleCommand(info buildinfo.Info) *cobra.Command {
+func newBundleCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	options := collect.Options{RequestTimeout: 30 * time.Second, UserAgent: "kubebao/" + info.Version}
 	output, outputFile := "text", ""
 	overwrite := false
 	var maxBackupAge time.Duration
 	command := &cobra.Command{
 		Use:   "support-bundle NAME --output-file FILE",
-		Short: "Write a local support bundle from bounded, projected Kubernetes evidence",
-		Long: "Collect the same read-only evidence as doctor and write a private local archive.\n" +
-			"Logs are not collected. Review resource names and approved metadata before sharing.",
+		Short: "Save diagnostic evidence to a local archive",
+		Long: "Collect the same read-only evidence as doctor and write it to a private local archive,\n" +
+			"together with the findings and a readable summary.\n\n" +
+			"Logs and Secrets are not collected. Review resource names and metadata before sharing\n" +
+			"the archive. Diagnose it offline with doctor --bundle.",
+		Example: "  kubebao support-bundle prod -n security --output-file prod-support.tar.gz\n" +
+			"  kubebao doctor --bundle prod-support.tar.gz",
 		Args: cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			if output != "text" && output != "json" {
@@ -81,9 +87,8 @@ func newBundleCommand(info buildinfo.Info) *cobra.Command {
 				if err := writeJSON(command.OutOrStdout(), result); err != nil {
 					return err
 				}
-			} else if _, err := fmt.Fprintf(command.OutOrStdout(), "Support bundle: %s\nCollection: %s\n",
-				result.OutputFile, result.CollectionResult); err != nil {
-				return fmt.Errorf("write support bundle result: %w", err)
+			} else if err := writeBundleText(term.stdout(command), result); err != nil {
+				return err
 			}
 			if result.ExitCode != 0 {
 				return commandResult{code: result.ExitCode, message: "partial support bundle saved"}
@@ -97,4 +102,30 @@ func newBundleCommand(info buildinfo.Info) *cobra.Command {
 	command.Flags().BoolVar(&overwrite, "overwrite", false, "Replace an existing regular output file")
 	command.Flags().StringVarP(&output, "output", "o", output, "Result format: text or json")
 	return command
+}
+
+func writeBundleText(output *render.Output, result bundleResult) error {
+	var b strings.Builder
+	if result.ExitCode == 0 {
+		b.WriteString(render.Status(render.Good, "Support bundle written") + "\n")
+	} else {
+		b.WriteString(render.Status(render.Warn, "Partial support bundle written") + "\n")
+		b.WriteString("  The cluster " + render.TargetResult(result.CollectionResult) + ". The bundle keeps the evidence that was read.\n")
+	}
+	diagnosis := "complete"
+	if !result.DiagnosticComplete {
+		diagnosis = "incomplete"
+	}
+	b.WriteString("\n" + render.Fields([]render.Field{
+		{Label: "File", Value: result.OutputFile},
+		{Label: "Collection", Value: render.Humanize(result.CollectionResult)},
+		{Label: "Diagnosis", Value: diagnosis},
+	}, "  "))
+	b.WriteString("\n" + render.Wrap("Logs and Secrets are not included. Review resource names and metadata before sharing.",
+		output.Width(), "  ") + "\n")
+	b.WriteString("  " + render.Next("Diagnose offline: "+render.Command("kubebao doctor --bundle "+result.OutputFile)) + "\n")
+	if _, err := output.WriteString(b.String()); err != nil {
+		return fmt.Errorf("write support bundle result: %w", err)
+	}
+	return nil
 }

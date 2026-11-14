@@ -21,7 +21,8 @@ func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func execute(ctx context.Context, executable string, args []string, stdout, stderr io.Writer) int {
-	command := newCommand(buildinfo.Current())
+	term := &terminal{environ: os.Environ()}
+	command := newCommand(buildinfo.Current(), term)
 	if filepath.Base(executable) == "kubectl-kubebao" {
 		command.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "kubectl kubebao"}
 	}
@@ -29,7 +30,7 @@ func execute(ctx context.Context, executable string, args []string, stdout, stde
 	command.SetOut(stdout)
 	command.SetErr(stderr)
 	if err := command.ExecuteContext(ctx); err != nil {
-		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		term.writeError(stderr, err)
 		var result interface{ ExitCode() int }
 		if errors.As(err, &result) {
 			return result.ExitCode()
@@ -39,13 +40,22 @@ func execute(ctx context.Context, executable string, args []string, stdout, stde
 	return 0
 }
 
-func newCommand(info buildinfo.Info) *cobra.Command {
+const (
+	groupInspect = "inspect"
+	groupControl = "control"
+)
+
+func newCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "kubebao",
-		Short: "Companion CLI for the OpenBao Operator",
-		Long: "kubebao is a companion CLI for the OpenBao Operator.\n\n" +
-			"Read cluster status and diagnose workload or recovery restrictions through Kubernetes.\n" +
-			"Create local support bundles, diagnose evidence offline, and submit guarded cluster controls.",
+		Short: "Inspect and operate OpenBao clusters managed by the OpenBao Operator",
+		Long: "kubebao inspects and operates OpenBao clusters managed by the OpenBao Operator.\n\n" +
+			"It reads what the operator reports through the Kubernetes API, diagnoses common problems,\n" +
+			"packages evidence for support, and submits guarded pause, maintenance, and restart requests.\n" +
+			"It never reads Secrets or contacts OpenBao directly.",
+		Example: "  kubebao status prod -n security\n" +
+			"  kubebao doctor prod -n security\n" +
+			"  kubebao maintenance enable prod -n security --wait",
 		Version:       info.String(),
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
@@ -58,8 +68,25 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.AddCommand(newVersionCommand(info), newStatusCommand(info), newDoctorCommand(info), newBundleCommand(info),
-		newPauseCommand(info, true), newPauseCommand(info, false), newMaintenanceCommand(info), newRestartCommand(info))
+	term.addFlags(root)
+	root.AddGroup(
+		&cobra.Group{ID: groupInspect, Title: "Inspect and diagnose:"},
+		&cobra.Group{ID: groupControl, Title: "Control a cluster:"},
+	)
+	inspect := []*cobra.Command{newStatusCommand(info, term), newDoctorCommand(info, term), newBundleCommand(info, term)}
+	control := []*cobra.Command{
+		newPauseCommand(info, term, true), newPauseCommand(info, term, false), newMaintenanceCommand(info, term),
+		newRestartCommand(info, term),
+	}
+	for _, command := range inspect {
+		command.GroupID = groupInspect
+	}
+	for _, command := range control {
+		command.GroupID = groupControl
+	}
+	root.AddCommand(inspect...)
+	root.AddCommand(control...)
+	root.AddCommand(newVersionCommand(info))
 	return root
 }
 

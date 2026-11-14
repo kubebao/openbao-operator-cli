@@ -26,6 +26,12 @@ because a finding exists or a rule lacks evidence. `--verbose` adds structured r
 times, and interpretation limits. Provider messages are excluded from text, verbose, and JSON output. Message fields
 remain empty for layout compatibility. A separate local-text projection policy is not implemented.
 
+Text output starts with a verdict derived from the attention entries: no issues reported, needs attention, or checks that
+lack evidence. It never reports health that the operator did not report. Values follow in Cluster, Controls, and
+Operations sections. The default view omits optional fields that the operator does not report, such as an absent
+restore hold or operation lock; `--verbose` shows every field, a conditions table, and the collection steps.
+Timestamps show their age relative to collection time.
+
 Normalized evidence distinguishes missing values from malformed values. The inspected adapter can interpret documented zero
 omission for ready replicas after current resource acknowledgement. An omitted backup failure counter remains unknown.
 A matching resource generation does not acknowledge every condition. Missing, stale, and inconsistent condition
@@ -42,6 +48,8 @@ Watch mode polls the selected UID and API group without rediscovery. Deletion, r
 the command. A replacement is identified by the collection outcome; its status is not returned as the selected resource.
 Each JSON line is a complete command report. Polling can miss intermediate states and is not event history. Ctrl+C stops
 a watch without changing cluster state. The default interval is two seconds; the minimum is `100ms`.
+On a terminal, text watch output redraws in place under a header with the interval and refresh time. Piped text and JSON
+output append one complete report per collection.
 
 One attempt has a 30-second deadline, configurable with `--request-timeout`. Each response is bounded to 8 MiB.
 Redirects are rejected. Reads do not retry or fall back to another API group. Provider response bodies and errors do not
@@ -63,7 +71,8 @@ the shared library's outcome names and retain scope and interval details.
 - `1`: invalid input, configuration or output failure, missing target, ambiguous discovery, or unsupported API-group selection.
 - `3`: collection is incomplete, the selected UID disappeared or changed, or a resource cannot be projected.
 
-Reports go to standard output. A nonzero result also writes a short result message to standard error. Input and
+Reports go to standard output. A nonzero result also writes a short result message to standard error; exit code `1`
+prefixes it with `Error:`, and exit code `3` does not, because the report already describes the result. Input and
 kubeconfig failures produce no status report. Version output has a separate JSON contract.
 
 ## Permissions

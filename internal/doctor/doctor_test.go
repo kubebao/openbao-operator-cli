@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/evidence"
+	"github.com/kubebao/openbao-operator-cli/internal/render"
 	"github.com/kubebao/openbao-operator-client/adapter"
 	"github.com/kubebao/openbao-operator-client/diagnose"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
@@ -28,7 +29,7 @@ func TestValidationFieldIsReportedWithoutRejectedEvidence(t *testing.T) {
 	}
 	data, marshalErr := json.Marshal(report)
 	var text bytes.Buffer
-	if marshalErr != nil || WriteText(&text, report, "incomplete", false) != nil ||
+	if marshalErr != nil || WriteText(render.Plain(&text), report, "incomplete", TextOptions{}) != nil ||
 		!strings.Contains(text.String(), want) || strings.Contains(string(data), "CANARY") {
 		t.Fatal("validation output omitted the field path or exposed rejected values")
 	}

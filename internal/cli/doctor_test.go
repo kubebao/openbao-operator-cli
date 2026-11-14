@@ -114,7 +114,8 @@ func TestDoctorVerboseOutputAndWriteFailure(t *testing.T) {
 	args := []string{"doctor", "prod", "--kubeconfig", statusConfig(t, server.URL), "--api-group", "openbao.org", "--verbose"}
 	var stdout, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, &stdout, &stderr); code != 2 || !strings.Contains(stdout.String(), "KBAO-POD-001") ||
-		!strings.Contains(stdout.String(), "UID=pod") {
+		!strings.Contains(stdout.String(), "uid pod") || !strings.Contains(stdout.String(), "Rule coverage") ||
+		!strings.Contains(stdout.String(), "╰── Pod prod-0  Running · not ready (FixtureReadiness)") {
 		t.Fatalf("verbose finding output failed: code %d; stdout %s", code, &stdout)
 	}
 	stderr.Reset()

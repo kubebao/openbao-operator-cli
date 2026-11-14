@@ -99,6 +99,9 @@ func waitRestart(ctx context.Context, client *collect.Client, options Options, r
 			report.ResultCode, report.ExitCode = "observation_blocked", 3
 			return report
 		}
+		if options.Observe != nil {
+			options.Observe(assessment)
+		}
 		timer := time.NewTimer(options.PollInterval)
 		select {
 		case <-ctx.Done():

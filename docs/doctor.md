@@ -108,7 +108,15 @@ finding-based failure while retaining collection and evaluation failures.
 - `3`: collection or selected evaluation is incomplete, including target verification failure.
 
 Incomplete diagnosis takes precedence over findings. Reports go to standard output; nonzero process results also write
-a short message to standard error. Resource names and approved operational metadata remain in the evidence.
+a short message to standard error. Exit code `1` prefixes it with `Error:`; findings and incomplete results do not.
+Resource names and approved operational metadata remain in the evidence.
+
+Text output starts with a verdict, severity counts, and rule coverage counts. Findings are ordered by severity. Each
+shows the rule's check name and ID, the shared summary, the suggested check, and a read-only `kubectl describe` command for
+the first referenced resource. Rules without enough evidence are listed with the reasons. A resource tree shows the
+cluster, its StatefulSets, their Pods, and restores. Placement follows recorded owner UIDs only; names and labels never
+place a node. Offline reports have no tree because legacy related-resource projections are absent. `--verbose` adds
+evidence references, container states, unverified candidates, every collection step, and a rule coverage table.
 
 Offline results add `source: "bundle"` and retain the captured interval and analysis reference time. Live results use
 `source: "live"`. Offline analysis uses the recorded policy and rejects Kubernetes options and `--max-backup-age`.

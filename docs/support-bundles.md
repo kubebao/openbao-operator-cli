@@ -36,7 +36,8 @@ reader is provided.
 - `manifest.json` records the bundle format, CLI build, selected target, collection interval,
   collection result and steps, requested timeout, log option, and diagnostic policy. The policy contains the selected
   rule IDs, thresholds, and analysis reference time. The client release defines evidence and rule semantics.
-- `summary.txt` contains captured times, collection results, findings, references, and coverage limits.
+- `summary.txt` contains captured times, collection results, findings, references, and coverage limits as plain text
+  without terminal escape sequences. It uses the verbose doctor layout.
 - `findings.json` contains the mapped findings, coverage, policy, and diagnostic completeness.
 - `evidence/capture.json` contains the shared normalized observations. It is `null` when discovery or the initial
   cluster read prevents evidence capture. Named collection failures remain in the manifest.

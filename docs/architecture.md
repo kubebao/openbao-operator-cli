@@ -36,7 +36,9 @@ The implementation separates:
 UID associations, and pure diagnostic rules. `internal/collect` configures the caller's kubeconfig transport, declares
 command scopes, and maps shared facts to CLI presentation. `internal/evidence` holds display models and the typed
 normalized capture; `internal/doctor` selects policy and maps shared findings. Neither package imports Kubernetes clients.
-`internal/status` and doctor render text. Command wrappers own JSON process envelopes, thresholds, and exit codes.
+`internal/render` owns terminal presentation: colour detection, layout, tables, trees, and plain-language wording for
+shared result codes. It is the only package that imports the styling library. `internal/status`, `internal/doctor`, and
+`internal/control` build text views with it. Command wrappers own JSON process envelopes, thresholds, and exit codes.
 The CLI owns bounded bundle archives and offline replay. `internal/control` orchestrates shared guarded submission and
 pure assessments. It owns bounded waits; collection remains read-only.
 

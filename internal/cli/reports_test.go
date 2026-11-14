@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kubebao/openbao-operator-cli/internal/collect"
+	"github.com/kubebao/openbao-operator-cli/internal/render"
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
@@ -121,7 +122,7 @@ func TestStatusValidationPathExcludesRejectedCaptureFromOutput(t *testing.T) {
 	}
 	for _, format := range []string{"text", "json"} {
 		var output bytes.Buffer
-		if err := writeStatus(&output, report, format, false); err != nil ||
+		if err := writeStatus(render.Plain(&output), report, format, false); err != nil ||
 			!strings.Contains(output.String(), report.ValidationPath) || strings.Contains(output.String(), "CANARY") {
 			t.Fatal("status validation output exposed data or omitted its field path")
 		}

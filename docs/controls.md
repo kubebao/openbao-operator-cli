@@ -58,7 +58,7 @@ In particular, a template marker alone does not establish a completed rollout.
 
 JSON includes the typed restart `plan`, the original `submission`, and optional `assessment` and `assessmentPolicy`.
 `configured` records the requested cluster marker; `operatorObserved` records current workload convergence. Text prints
-these as API submission and rollout observation. An `unknown` submission remains `unknown` even when a later read
+these as the submission, "Marker configured", and "Rollout converged". An `unknown` submission remains `unknown` even when a later read
 confirms convergence. The marker is generated once and is never refreshed or resubmitted during waiting.
 
 Observed convergence does not attribute Pod replacement to this request or prove serving health, Raft quorum, or
@@ -89,7 +89,10 @@ Workload reads are skipped when pause evidence already prevents propagation asse
 
 ## Output and permissions
 
-Text and JSON distinguish submission from assessment. JSON uses command schema `v1` with `target`, `plan`, `submission`,
+Text and JSON distinguish submission from assessment. Text starts with a verdict, explains the result in plain
+language, and suggests a follow-up command for the same target. A maintenance change that is blocked by pause suggests
+an explicit `kubebao resume` and never performs it. While `--wait` polls, a transient progress line on an interactive
+standard error shows the elapsed time and pending reasons; it is not written to pipes or files. JSON uses command schema `v1` with `target`, `plan`, `submission`,
 optional `assessment` and `assessmentPolicy`, `collection`, `warnings`, `resultCode`, and `exitCode`. Assessment policy
 records the analysis reference time and bounds. Plans contain approved identity and
 concurrency fields. Provider messages, raw Kubernetes resources, transport errors, and credentials are excluded.

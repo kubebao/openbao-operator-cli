@@ -25,6 +25,16 @@ Version JSON uses `schemaVersion: "v1"` and contains `version`, `commit`, `goVer
 Successful commands return exit code `0`. Invalid input or an execution failure returns `1`. Command results go to
 standard output; errors go to standard error.
 
+## Output
+
+Every command that reports a result supports `--output text` (the default) and `--output json`. JSON is the stable,
+versioned interface for scripts. Text output is written for people and may change between releases.
+
+Text output uses colour and symbols when standard output is a terminal. Select `--color auto`, `always`, or `never`.
+`auto` honours `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `TERM`. Pipes, files, and JSON never receive escape
+sequences. Symbols carry meaning without colour: `✓` good, `!` warning, `✗` failure, `?` unknown. Text reports suggest
+copyable follow-up commands for the same cluster, namespace, and context.
+
 ## Cluster status
 
 ```sh

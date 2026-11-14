@@ -75,7 +75,7 @@ func TestSupportBundleCommandAndOfflineDiagnosis(t *testing.T) {
 			stdout.Reset()
 			stderr.Reset()
 			_ = Execute(context.Background(), []string{"doctor", "--bundle", path}, &stdout, &stderr)
-			if !strings.Contains(stdout.String(), "Offline analysis: captured") {
+			if !strings.Contains(stdout.String(), "Offline diagnosis of prod") {
 				t.Fatal("text output does not identify captured evidence")
 			}
 		})

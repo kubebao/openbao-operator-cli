@@ -21,6 +21,8 @@ type Options struct {
 	WaitTimeout    time.Duration
 	PollInterval   time.Duration
 	RequestTimeout time.Duration
+	// Observe receives each assessment that is still pending during a wait. It must not block.
+	Observe func(operations.Assessment)
 }
 
 // Report separates API acceptance from observation. Assessment is absent without --wait.
@@ -144,6 +146,9 @@ func wait(ctx context.Context, client *collect.Client, options Options, report R
 		if assessment.State == operations.AssessmentBlocked {
 			report.ResultCode, report.ExitCode = "observation_blocked", 3
 			return report
+		}
+		if options.Observe != nil {
+			options.Observe(assessment)
 		}
 		timer := time.NewTimer(options.PollInterval)
 		select {

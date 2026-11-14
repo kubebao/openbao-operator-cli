@@ -12,7 +12,7 @@ import (
 	"github.com/kubebao/openbao-operator-cli/internal/collect"
 )
 
-func newDoctorCommand(info buildinfo.Info) *cobra.Command {
+func newDoctorCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	options := collect.Options{RequestTimeout: 30 * time.Second, UserAgent: "kubebao/" + info.Version}
 	output, failOn := "text", "warning"
 	verbose := false
@@ -20,10 +20,16 @@ func newDoctorCommand(info buildinfo.Info) *cobra.Command {
 	var maxBackupAge time.Duration
 	command := &cobra.Command{
 		Use:   "doctor [NAME] [--bundle FILE]",
-		Short: "Diagnose operator and workload observations from live or bundled evidence",
-		Long: "Collect approved cluster, StatefulSet, Pod, and restore observations.\n" +
-			"Rules interpret captured evidence without contacting OpenBao or changing cluster state.\n" +
-			"Missing or unreadable evidence remains unknown.",
+		Short: "Diagnose a cluster from live or bundled evidence",
+		Long: "Check one OpenBaoCluster and the StatefulSets, Pods, and restores it owns, then report\n" +
+			"findings with a suggested next step and the resources that were examined.\n\n" +
+			"Doctor is read-only. Rules run on collected Kubernetes evidence, never on live OpenBao probes,\n" +
+			"and evidence that could not be read is reported as unknown. Use --bundle to diagnose a\n" +
+			"support bundle offline.",
+		Example: "  kubebao doctor prod -n security\n" +
+			"  kubebao doctor prod -n security --verbose\n" +
+			"  kubebao doctor prod -n security --fail-on error --max-backup-age 48h\n" +
+			"  kubebao doctor --bundle prod-support.tar.gz",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			if output != "text" && output != "json" {
@@ -54,7 +60,7 @@ func newDoctorCommand(info buildinfo.Info) *cobra.Command {
 				snapshot := client.CollectDiagnostic(command.Context())
 				report = diagnosticResultWithPolicy(snapshot, failOn, diagnosticPolicy(snapshot, maxBackupAge))
 			}
-			if err := writeDiagnostic(command.OutOrStdout(), report, output, verbose); err != nil {
+			if err := writeDiagnostic(term.stdout(command), report, output, verbose); err != nil {
 				return err
 			}
 			if report.ExitCode != 0 {

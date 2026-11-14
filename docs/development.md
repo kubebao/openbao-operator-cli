@@ -9,8 +9,10 @@
 | `internal/buildinfo` | Version, commit, and runtime metadata |
 | `internal/evidence` | Shared typed observations, references, and sanitization |
 | `internal/collect` | Kubernetes access, ownership association, and approved projections |
-| `internal/status` | Human-readable and JSON status rendering |
-| `internal/doctor` | Pure diagnostic rules, coverage results, and findings rendering |
+| `internal/render` | Terminal presentation: colour detection, symbols, fields, tables, trees, and wording |
+| `internal/status` | Human-readable status view |
+| `internal/doctor` | Diagnostic policy, finding mapping, and the diagnosis view with its ownership tree |
+| `internal/control` | Guarded control submission, bounded waits, and the control result view |
 | `scripts` | Local distribution packaging and dependency license generation |
 | `.github` | CI workflows and contribution templates |
 

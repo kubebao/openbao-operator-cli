@@ -26,6 +26,7 @@ func TestCommandOutputAndExitCodes(t *testing.T) {
 		{"unknown flag", []string{"version", "--unknown"}, 1},
 		{"extra argument", []string{"version", "prod"}, 1},
 		{"invalid output", []string{"version", "--output", "yaml"}, 1},
+		{"invalid color", []string{"version", "--color", "sometimes"}, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,7 +49,7 @@ func TestCommandOutputAndExitCodes(t *testing.T) {
 func TestVersionJSONContract(t *testing.T) {
 	t.Parallel()
 	info := buildinfo.Info{Version: "v0.1.0", Commit: "0123abcd", GoVersion: "go1.27.3", OS: "linux", Arch: "arm64"}
-	command := newCommand(info)
+	command := newCommand(info, &terminal{color: "auto"})
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)

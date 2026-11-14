@@ -446,8 +446,9 @@ func TestRestartTextAndOutputFailurePreserveSubmission(t *testing.T) {
 	args := []string{"restart", "prod", "--dry-run", "--kubeconfig", statusConfig(t, server.URL), "--api-group", f.group}
 	var stdout, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, &stdout, &stderr); code != 0 ||
-		!strings.Contains(stdout.String(), "API submission: dry_run_accepted") ||
-		!strings.Contains(stdout.String(), "Rollout observation: not assessed") {
+		!strings.Contains(stdout.String(), "Dry run: the API server would accept spec.runtime.restartAt = ") ||
+		!strings.Contains(stdout.String(), "Submission  accepted in dry run; not persisted") ||
+		strings.Contains(stdout.String(), "Observation") || strings.Contains(stdout.String(), "\x1b[") {
 		t.Fatalf("restart text: stdout=%s stderr=%s", &stdout, &stderr)
 	}
 	if code := Execute(context.Background(), args, failingWriter{}, &stderr); code != 1 || f.patches.Load() != 2 {
@@ -465,13 +466,13 @@ func TestRestartTextSeparatesConfiguredMarkerAndWorkloadConvergence(t *testing.T
 			"restart", "prod", "--wait", "--wait-timeout", "80ms", "--poll-interval", "100ms",
 			"--kubeconfig", statusConfig(t, server.URL), "--api-group", f.group,
 		}, &stdout, &stderr)
-		wantCode, convergence := 0, "true"
+		wantCode, convergence := 0, "yes"
 		if workload != "" {
-			wantCode, convergence = 3, "false"
+			wantCode, convergence = 3, "no"
 		}
-		if code != wantCode || !strings.Contains(stdout.String(), "API submission: accepted") ||
-			!strings.Contains(stdout.String(), "Marker configured: true") ||
-			!strings.Contains(stdout.String(), "Workload convergence: "+convergence) {
+		if code != wantCode || !strings.Contains(stdout.String(), "Submission         accepted by the API server") ||
+			!strings.Contains(stdout.String(), "Marker configured  yes") ||
+			!strings.Contains(stdout.String(), "Rollout converged  "+convergence) {
 			t.Fatalf("restart text merged distinct results: code=%d stdout=%s stderr=%s", code, &stdout, &stderr)
 		}
 	}

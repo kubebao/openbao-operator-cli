@@ -416,8 +416,8 @@ func TestControlTextAndOutputFailureKeepSubmissionSeparate(t *testing.T) {
 	args := []string{"pause", "prod", "--dry-run", "--kubeconfig", statusConfig(t, server.URL), "--api-group", fixture.group}
 	var stdout, stderr bytes.Buffer
 	if code := Execute(context.Background(), args, &stdout, &stderr); code != 0 ||
-		!strings.Contains(stdout.String(), "API submission: dry_run_accepted") ||
-		!strings.Contains(stdout.String(), "Operator observation: not assessed") {
+		!strings.Contains(stdout.String(), "Dry run: the API server would accept spec.paused = true") ||
+		!strings.Contains(stdout.String(), "Submission  accepted in dry run; not persisted") {
 		t.Fatalf("dry-run text: stdout=%s stderr=%s", &stdout, &stderr)
 	}
 	if code := Execute(context.Background(), args, failingWriter{}, &stderr); code != 1 || fixture.patches.Load() != 2 {
