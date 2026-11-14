@@ -1,6 +1,6 @@
 # Set cluster controls
 
-Pause and maintenance change independent operator configuration fields. Each command reads one named
+Pause, maintenance, and restart change separate operator configuration fields. Each command reads one named
 `OpenBaoCluster`, then submits one JSON Patch guarded by its UID, resource version, and generation.
 
 ```sh
@@ -8,6 +8,8 @@ kubebao pause prod -n security
 kubebao resume prod -n security --wait
 kubebao maintenance enable prod -n security --wait
 kubebao maintenance disable prod -n security --dry-run --output json
+kubebao restart prod -n security --dry-run
+kubebao restart prod -n security --wait --wait-timeout 5m
 ```
 
 The commands accept the [status connection options](status.md). Select `--api-group kubebao.org` or
@@ -32,6 +34,36 @@ observed the change. `unknown` means the response cannot establish whether the r
 target before deciding on another action. The CLI never retries a mutation, rolls it back, or switches API groups.
 With `--wait`, an unknown submission can be followed by read-only assessment. Its original `unknown` classification
 remains in the submission result even if later evidence reports the requested state.
+
+## Rolling restart
+
+`restart` writes one new RFC 3339 timestamp to `spec.runtime.restartAt`. It preserves other runtime fields and creates
+an absent or null runtime object when needed. The operator propagates the marker and manages the rollout. The CLI does
+not delete Pods or change pause, maintenance, restore holds, or upgrade strategy.
+
+Preparation requires current cluster acknowledgement and reported desired and accepted `RollingUpdate` strategy.
+Pause, a restore hold, an operation lock, active or unconfirmed break glass, and Blue/Green state prevent submission.
+A missing strategy or incomplete evidence also prevents submission. Maintenance is independent of pause; its value
+remains unchanged.
+
+With `--wait`, the CLI reads bounded namespace StatefulSet and Pod lists and verifies the original cluster again.
+Observation requires UID-confirmed ownership, complete fresh reads, exact expected pool populations, the requested
+marker on each StatefulSet template and live Pod, converged StatefulSet revisions and replica counts, and current
+Running/Ready Pods. A configured zero read-replica pool requires its StatefulSet and no live Pods. A positive
+`minReadySeconds` also requires the StatefulSet's available replica count to match its desired count.
+
+The assessment supports ordinary `RollingUpdate` StatefulSets with an absent or zero partition. `OnDelete`, nonzero
+partitions, Blue/Green topology, incomplete reads, or conflicting ownership cannot establish an observed restart.
+In particular, a template marker alone does not establish a completed rollout.
+
+JSON includes the typed restart `plan`, the original `submission`, and optional `assessment` and `assessmentPolicy`.
+`configured` records the requested cluster marker; `operatorObserved` records current workload convergence. Text prints
+these as API submission and rollout observation. An `unknown` submission remains `unknown` even when a later read
+confirms convergence. The marker is generated once and is never refreshed or resubmitted during waiting.
+
+Observed convergence does not attribute Pod replacement to this request or prove serving health, Raft quorum, or
+end-to-end application availability. Operator runtime qualification uses a disposable local cluster; it does not
+establish HA or production operation.
 
 ## Observation
 
@@ -71,7 +103,7 @@ change to this request or prove that another operation has stopped.
 
 Controls require named-resource `get` and `patch` on `openbaoclusters` in the selected API group and namespace, plus
 access to its discovery endpoint. Automatic selection reads both declared discovery endpoints and requires an
-unambiguous result. Maintenance waits also need namespace `list` on StatefulSets and Pods. Pause and resume waits need
+unambiguous result. Maintenance and restart waits also need namespace `list` on StatefulSets and Pods. Pause and resume waits need
 only the named cluster read. No Secret, Pod log or exec, OpenBao, or cloud API access is added.
 
 The shared client owns public projections, guarded submission, and pure assessments. The CLI owns credentials, API

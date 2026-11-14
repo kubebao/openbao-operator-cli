@@ -65,7 +65,7 @@ func TestNativeObservationBundleAndOfflineDiagnosis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Manifest.FormatVersion != "v2" || stored.Capture == nil || len(stored.Capture.Clusters) != 1 {
+	if stored.Manifest.FormatVersion != "v3" || stored.Capture == nil || len(stored.Capture.Clusters) != 1 {
 		t.Fatal("bundle lost the current format or normalized capture")
 	}
 	capture, err := json.Marshal(stored.Capture)

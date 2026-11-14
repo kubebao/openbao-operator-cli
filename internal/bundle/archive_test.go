@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,11 +167,11 @@ func TestRejectsUnsafeAndUnsupportedArchives(t *testing.T) {
 		},
 		{name: "missing entry", change: func(e map[string][]byte) { delete(e, "summary.txt") }},
 		{name: "future version", change: func(e map[string][]byte) {
-			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"formatVersion":"v2"`), []byte(`"formatVersion":"future"`), 1)
+			e["manifest.json"] = bytes.Replace(e["manifest.json"], []byte(`"formatVersion":"v3"`), []byte(`"formatVersion":"future"`), 1)
 		}},
 		{name: "old bundle format", change: func(e map[string][]byte) {
 			e["manifest.json"] = bytes.Replace(e["manifest.json"],
-				[]byte(`"formatVersion":"v2"`), []byte(`"formatVersion":"v1","evidenceSchemaVersion":"5"`), 1)
+				[]byte(`"formatVersion":"v3"`), []byte(`"formatVersion":"v1","evidenceSchemaVersion":"5"`), 1)
 		}},
 		{name: "removed evidence schema field", change: func(e map[string][]byte) {
 			e["manifest.json"] = append([]byte(`{"evidenceSchemaVersion":"5",`), e["manifest.json"][1:]...)
@@ -277,11 +278,13 @@ func TestOldBundleFormatRequiresRecollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries["manifest.json"] = bytes.Replace(entries["manifest.json"], []byte(`"formatVersion":"v2"`),
-		[]byte(`"formatVersion":"v1","evidenceSchemaVersion":"5"`), 1)
-	_, err = readArchive(context.Background(), bytes.NewReader(testArchive(t, entries, nil)))
-	if err == nil || err.Error() != "unsupported bundle format; collect a new bundle with the current CLI" {
-		t.Fatal("old bundle format did not produce recollection guidance")
+	for _, previous := range []string{`"formatVersion":"v1","evidenceSchemaVersion":"5"`, `"formatVersion":"v2"`} {
+		current := maps.Clone(entries)
+		current["manifest.json"] = bytes.Replace(entries["manifest.json"], []byte(`"formatVersion":"v3"`), []byte(previous), 1)
+		_, err = readArchive(context.Background(), bytes.NewReader(testArchive(t, current, nil)))
+		if err == nil || err.Error() != "unsupported bundle format; collect a new bundle with the current CLI" {
+			t.Fatal("old bundle format did not produce recollection guidance")
+		}
 	}
 }
 
@@ -305,7 +308,7 @@ func TestBundleUsesOneFormatMarker(t *testing.T) {
 		}
 	}
 	if bytes.Count(entries["manifest.json"], []byte(`"formatVersion"`)) != 1 ||
-		!bytes.Contains(entries["manifest.json"], []byte(`"formatVersion":"v2"`)) {
+		!bytes.Contains(entries["manifest.json"], []byte(`"formatVersion":"v3"`)) {
 		t.Fatal("bundle has no single current format marker")
 	}
 }

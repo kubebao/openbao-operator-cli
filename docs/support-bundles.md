@@ -20,7 +20,7 @@ or publication.
 
 ## Contents and disclosure scope
 
-Format `v2` contains four regular files:
+Format `v3` contains four regular files:
 
 ```text
 manifest.json
@@ -29,8 +29,9 @@ findings.json
 evidence/capture.json
 ```
 
-The manifest has one format marker: `formatVersion: "v2"`. The reader rejects other formats. Collect a new bundle
-with the current CLI when a bundle uses an unsupported format. No migration reader is provided.
+The manifest has one format marker: `formatVersion: "v3"`. The reader rejects other formats. Collect a new bundle
+with the current CLI when a bundle uses an unsupported format, including earlier `v1` and `v2` bundles. No migration
+reader is provided.
 
 - `manifest.json` records the bundle format, CLI build, selected target, collection interval,
   collection result and steps, requested timeout, log option, and diagnostic policy. The policy contains the selected
@@ -86,7 +87,7 @@ analysis and captured times. JSON uses `source: "bundle"`. Kubernetes flags, a c
 be combined with `--bundle`. Output and failure-threshold options remain available. Doctor retains its usual exit codes,
 including `2` for findings and `3` for incomplete collection or evaluation.
 
-The reader accepts only bundle format `v2` and the current typed evidence shape. It rejects unknown JSON fields and
+The reader accepts only bundle format `v3` and the current typed evidence shape. It rejects unknown JSON fields and
 invalid evidence. It preserves the captured policy and reference time. Use the recorded CLI build to reproduce its
 diagnostic semantics; rule behavior changes with the pinned client release.
 

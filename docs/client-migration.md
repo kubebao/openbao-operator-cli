@@ -13,7 +13,7 @@ Go 1.27.4 is required.
 | --- | --- |
 | Public field projection, generation semantics, UID association, bounded reads, pure rules | Shared client |
 | Kubeconfig, context, namespace, credential plugins, selected target, watch loop | CLI |
-| Guarded control plans, submission, and pure assessment | Shared client |
+| Guarded pause, maintenance, and restart plans, submission, and pure assessment | Shared client |
 | Command JSON/text, thresholds, process results, and bounded control waits | CLI wrappers |
 | Display projections and pure finding mapping | CLI packages without Kubernetes clients |
 
@@ -61,7 +61,8 @@ Command tests cover text/JSON, API ambiguity and selection, request paths/select
 limits, UID deletion/replacement, cancellation, timeouts, redirects, output failures, and sensitive-data exclusion.
 Native command regressions cover status, diagnosis, support-bundle creation, and offline replay. Control tests verify one
 PATCH, optimistic-concurrency fields, unknown outcomes without resubmission, bounded waits, maintenance while paused,
-and workload-read failures. Captured policy fixes the reference time for deterministic offline analysis.
+and workload-read failures. Restart tests also cover marker/revision/readiness convergence, unsupported rollout strategy,
+parent shape, replacement, and interrupted observation. Captured policy fixes the reference time for deterministic offline analysis.
 
 The dependency notice generator includes the client license and upstream NOTICE files. Final builds require no local
 replacement or workspace. The CLI repository has GitHub Actions disabled; local checks do not establish hosted CLI CI.
@@ -71,7 +72,7 @@ Exact client, CLI, operator, image, and CRD identities belong in qualification p
 
 The inspected contracts cover legacy operator `0.6.1` and native candidate
 `22894cdc0a4aa5c442a07f2bf9902fe28ce02ea1`. The native contract does not qualify a released native operator.
-The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/369ddfbce594787deb2466080523e402eef58a48/docs/compatibility.md)
+The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/4e696c784bfa7133455fea139ace51ec45480e0d/docs/compatibility.md)
 describes the operator fixtures and validation limits. API discovery alone does not qualify another operator build.
 
 Control qualification uses disposable Kubernetes 1.36.1 clusters on Linux/arm64 with OpenBao 2.7.2, self-initialization,
@@ -122,3 +123,20 @@ the incomplete diagnostic result. Coverage retains the shared insufficiency reas
 Malformed normalized input adds `validationPath` to command JSON and a validation-field line to text output. The field
 contains only library-owned names and indices. A rejected normalized capture is omitted from output. Provider errors
 and invalid source values do not enter the diagnostic message.
+
+## Rolling-restart qualification boundary
+
+Runtime restart qualification covers native operator `0.7.0-rc.1`, source
+`7b9bbf8b1a2aa3a62e2235607073df3e912643b5`, in a disposable local Kind cluster. The CLI pins public client
+`v0.2.1-0.20261114090502-4e696c784bfa` with `GOWORK=off` and no replacements. Tests cover one voter, three voters with one
+steady read replica, and one voter with a configured zero-replica read pool.
+
+For each fixture, `TestOperatorRestartAndRollout` verifies server dry-run without persisted marker or Pod identity changes,
+then submits one guarded restart, waits for marker/revision/readiness convergence, and verifies that every original
+UID-confirmed Pod was replaced. The separate runtime harness checks causality through its before/after identities;
+command assessment reports current convergence only. See the [runtime test procedure](development.md#rolling-restart-runtime-qualification).
+
+Synthetic command tests cover legacy API paths, denial, conflicts, unknown responses without retry, cancellation,
+replacement, incomplete or denied workloads, wrong markers and revisions, unready Pods, unsupported OnDelete strategy,
+and Blue/Green refusal. Runtime qualification does not cover a legacy operator, Blue/Green restart, HA resilience,
+serving health, production capacity, or end-to-end application availability.

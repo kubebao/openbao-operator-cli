@@ -88,3 +88,27 @@ contents. Synthetic command tests cover discovery/named-read boundaries, doctor 
 verification, interruption, timeout, redirects, output failure, process codes, and sensitive-data exclusion. Pure mapping
 tests replay serialized normalized evidence with the same policy and reference time. Operator qualification must record
 its image/CRD identities and exercised capabilities separately.
+
+## Rolling-restart runtime qualification
+
+Run `TestOperatorRestartAndRollout` only against a disposable local Kind fixture. It sends a server dry-run request,
+submits one guarded restart, waits for observed convergence, and checks that every original UID-confirmed Pod was
+replaced. The test creates no Kubernetes resources. It requires an existing healthy fixture with the native API,
+RollingUpdate strategy, and get/patch permission on the selected cluster plus namespace StatefulSet and Pod lists.
+
+Set all fixture identifiers and the mutation opt-in before running it:
+
+```sh
+KUBEBAO_TEST_RESTART_ALLOW_MUTATION=true \
+KUBEBAO_TEST_RESTART_KUBECONFIG=/path/to/disposable-kubeconfig \
+KUBEBAO_TEST_RESTART_CONTEXT=kind-restart-fixture \
+KUBEBAO_TEST_RESTART_NAMESPACE=restart-tests \
+KUBEBAO_TEST_RESTART_CLUSTER=bao \
+KUBEBAO_TEST_RESTART_TARGET_UID='<exact-cluster-uid>' \
+GOWORK=off go test -race -count=1 ./internal/cli -run '^TestOperatorRestartAndRollout$' -v
+```
+
+The harness rejects non-Kind context names, missing fixture identifiers, or a mismatched target UID before submission.
+Its mutation opt-in is separate from ordinary `make check`. Use a separate fixture for each intended topology and
+record the operator source, image, CRD, Kubernetes, client, and CLI identities with the results. The UID replacement
+check belongs to this harness; command assessment reports current rollout convergence without attributing causality.

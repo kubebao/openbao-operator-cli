@@ -19,8 +19,8 @@ recovery restrictions from that captured evidence. It does not change cluster st
 `kubebao` connects to Kubernetes through the caller's kubeconfig. It requires neither the console nor a backend service.
 The operator retains responsibility for reconciliation and lifecycle safety.
 
-The command set includes status, diagnosis, local support bundles, offline diagnosis, pause and resume, and maintenance
-enable and disable. Backup execution, upgrades, restores, restarts, scaling, installation, and automatic repair remain
+The command set includes status, diagnosis, local support bundles, offline diagnosis, pause and resume, maintenance
+enable and disable, and guarded rolling restart. Backup execution, upgrades, restores, scaling, installation, and automatic repair remain
 outside its scope. General OpenBao administration continues through `bao`.
 
 The implementation separates:
@@ -63,6 +63,8 @@ Bundle readers enforce format, path, and size limits without extracting arbitrar
 
 Pause sets `spec.paused`; maintenance sets `spec.maintenance.enabled`. Pause acknowledgement does not prove that work
 already started has stopped. Maintenance completion requires observed annotation propagation to the relevant workloads.
+Restart sets `spec.runtime.restartAt`; observation requires the requested marker, converged revisions and replica counts,
+and UID-confirmed Ready Pods under supported RollingUpdate topology. It does not establish serving health or Raft quorum.
 
 Maintenance annotations require workload reconciliation. When both controls are needed, enable and verify maintenance
 before pausing. Resume and disable maintenance are separate steps. Never resume implicitly, clear an independent recovery

@@ -18,7 +18,7 @@ import (
 	shared "github.com/kubebao/openbao-operator-client/evidence"
 )
 
-const FormatVersion = "v2"
+const FormatVersion = "v3"
 
 // Manifest describes collection independently of diagnostic completeness.
 type Manifest struct {

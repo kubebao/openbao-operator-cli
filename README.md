@@ -3,7 +3,7 @@
 Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator).
 
 The CLI reports operator-published cluster status, diagnoses captured observations, creates local support bundles,
-and submits guarded pause, resume, and maintenance controls.
+and submits guarded pause, resume, maintenance, and rolling-restart controls.
 
 ## Build and run
 
@@ -67,6 +67,7 @@ See [support bundles](docs/support-bundles.md) for the format, limits, partial r
 ./bin/kubebao resume prod -n security --wait
 ./bin/kubebao maintenance enable prod -n security --wait
 ./bin/kubebao maintenance disable prod -n security --dry-run
+./bin/kubebao restart prod -n security --wait --wait-timeout 5m
 ```
 
 Controls submit one field-scoped JSON Patch guarded by UID, resource version, and generation. API acceptance and later

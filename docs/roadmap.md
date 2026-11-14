@@ -1,7 +1,7 @@
 # Implementation roadmap
 
-The first release covers single-cluster diagnostics, local support bundles, offline diagnosis, and guarded pause and
-maintenance controls. The console remains optional and retains enrollment, fleet history, and persistence.
+The first release covers single-cluster diagnostics, local support bundles, offline diagnosis, and guarded pause, maintenance, and
+rolling-restart controls. The console remains optional and retains enrollment, fleet history, and persistence.
 
 ## Implemented foundation
 
@@ -10,7 +10,7 @@ diagnostic rules. The CLI owns kubeconfig loading, command policy, output, exit 
 archives, and offline replay. See [shared client integration](client-migration.md) for qualification evidence.
 
 Status, diagnostic policy selection, local support bundles without logs, offline replay, guarded pause/resume, and
-maintenance controls are implemented. API adapters cover native and legacy API groups. Backup age
+maintenance and rolling-restart controls are implemented. API adapters cover native and legacy API groups. Backup age
 requires a declared threshold. The pinned client release defines the evidence model and diagnostic behavior. Support
 bundles have one format marker and no separate evidence or rule-set versions.
 

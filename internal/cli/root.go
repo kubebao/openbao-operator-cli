@@ -50,7 +50,7 @@ func newCommand(info buildinfo.Info) *cobra.Command {
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
 	root.AddCommand(newVersionCommand(info), newStatusCommand(info), newDoctorCommand(info), newBundleCommand(info),
-		newPauseCommand(info, true), newPauseCommand(info, false), newMaintenanceCommand(info))
+		newPauseCommand(info, true), newPauseCommand(info, false), newMaintenanceCommand(info), newRestartCommand(info))
 	return root
 }
 
