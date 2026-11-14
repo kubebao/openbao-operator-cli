@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/kubebao/openbao-operator-client v0.2.1-0.20261114114115-f5819de15ec0
+	github.com/kubebao/openbao-operator-client v0.2.1-0.20261114115514-8981014162d0
 	github.com/spf13/cobra v1.10.2
 	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v0.37.2

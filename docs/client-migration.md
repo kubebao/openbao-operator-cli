@@ -72,7 +72,7 @@ Exact client, CLI, operator, image, and CRD identities belong in qualification p
 
 The inspected contracts cover legacy operator `0.6.1` and native candidate
 `22894cdc0a4aa5c442a07f2bf9902fe28ce02ea1`. The native contract does not qualify a released native operator.
-The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/f5819de15ec07feb066b1c421045c75b37af0648/docs/compatibility.md)
+The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/8981014162d00a902584dff0e5a2b9d5fd519e5d/docs/compatibility.md)
 describes the operator fixtures and validation limits. API discovery alone does not qualify another operator build.
 
 Control qualification uses disposable Kubernetes 1.36.1 clusters on Linux/arm64 with OpenBao 2.7.2, self-initialization,

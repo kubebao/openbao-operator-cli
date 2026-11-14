@@ -76,6 +76,8 @@ github.com/kubebao/openbao-operator-client v0.2.1-0.20261114113918-df9f0b658db1 
 github.com/kubebao/openbao-operator-client v0.2.1-0.20261114113918-df9f0b658db1/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
 github.com/kubebao/openbao-operator-client v0.2.1-0.20261114114115-f5819de15ec0 h1:7UwQBjoIR1eZzvthEyJRjfzDZJsd9odoygLZCk2nlp4=
 github.com/kubebao/openbao-operator-client v0.2.1-0.20261114114115-f5819de15ec0/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
+github.com/kubebao/openbao-operator-client v0.2.1-0.20261114115514-8981014162d0 h1:jLyre2dtCKBph+lecVACcTiXuvCx95SztEfB3gv5G6g=
+github.com/kubebao/openbao-operator-client v0.2.1-0.20261114115514-8981014162d0/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
 github.com/lucasb-eyer/go-colorful v1.4.1 h1:1EO+WB73+EH8EVbzlrG3KLAfEypQWVHIBqlTf+2hNss=
 github.com/lucasb-eyer/go-colorful v1.4.1/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/mattn/go-runewidth v0.0.24 h1:cpokDiIn0MGnhdHwuWnJBITySJ20QyNGnY2kR/ay2DU=
