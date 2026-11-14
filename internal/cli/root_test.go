@@ -74,6 +74,27 @@ func TestVersionJSONContract(t *testing.T) {
 	}
 }
 
+func TestPluginInvocation(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"--help"}, {"status", "--help"}, {"doctor", "--help"}, {"restart", "--help"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			var stdout, stderr bytes.Buffer
+			code := execute(context.Background(), "/plugins/kubectl-kubebao", args, &stdout, &stderr)
+			if code != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "kubectl kubebao") {
+				t.Fatalf("exit code = %d; stdout = %q; stderr = %q", code, &stdout, &stderr)
+			}
+		})
+	}
+	var standalone, plugin, stderr bytes.Buffer
+	args := []string{"version", "--output", "json"}
+	if execute(context.Background(), "kubebao", args, &standalone, &stderr) != 0 ||
+		execute(context.Background(), "kubectl-kubebao", args, &plugin, &stderr) != 0 ||
+		standalone.String() != plugin.String() || stderr.Len() != 0 {
+		t.Fatalf("standalone = %q; plugin = %q; stderr = %q", &standalone, &plugin, &stderr)
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) {

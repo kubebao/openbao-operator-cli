@@ -5,6 +5,9 @@ Companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-oper
 The CLI reports operator-published cluster status, diagnoses captured observations, creates local support bundles,
 and submits guarded pause, resume, maintenance, and rolling-restart controls.
 
+The CLI is unreleased. Build it from source for now. GitHub downloads, Homebrew, and Krew are prepared distribution
+channels; their public installation commands become available after publication. See [installation](docs/installation.md).
+
 ## Build and run
 
 Use Go 1.27.4 or a newer compatible toolchain. Go can download the required toolchain when `GOTOOLCHAIN=auto`.
@@ -98,15 +101,19 @@ make check-licenses
 ## Local distribution archives
 
 ```sh
-make dist VERSION=0.0.0-dev
+make dist DIST_VERSION=0.0.0-dev
+make verify-dist
 ```
 
-This builds archives for Linux and macOS on amd64 and arm64, with license notices and `dist/checksums.txt`. It does not
-publish a release. Verify the checksums from the archive directory:
+This uses pinned GoReleaser and Syft binaries to build archives for Linux and macOS on amd64 and arm64. It also writes
+SPDX SBOMs, license notices, SHA-256 checksums, a Homebrew cask, and a Krew manifest. It does not publish a release or
+update package repositories. Verify the checksums from the archive directory:
 
 ```sh
 cd dist
 shasum -a 256 -c checksums.txt
 ```
+
+See [release procedures](docs/releases.md) for publication gates, signing, provenance, and package promotion.
 
 The project uses the [Apache License 2.0](LICENSE). Bundled dependency notices are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).

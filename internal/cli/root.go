@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -15,7 +17,14 @@ import (
 
 // Execute writes command output and returns a process exit code.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return execute(ctx, os.Args[0], args, stdout, stderr)
+}
+
+func execute(ctx context.Context, executable string, args []string, stdout, stderr io.Writer) int {
 	command := newCommand(buildinfo.Current())
+	if filepath.Base(executable) == "kubectl-kubebao" {
+		command.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "kubectl kubebao"}
+	}
 	command.SetArgs(args)
 	command.SetOut(stdout)
 	command.SetErr(stderr)

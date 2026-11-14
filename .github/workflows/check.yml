@@ -70,10 +70,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Build distribution archives
-        run: make dist VERSION="0.0.0-dev.${GITHUB_SHA}"
+        run: make release-check dist DIST_VERSION="0.0.0-dev.${GITHUB_SHA}"
       - name: Verify archive checksums
-        working-directory: dist
-        run: shasum -a 256 -c checksums.txt
+        run: make verify-dist
       - name: Upload distribution archives
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

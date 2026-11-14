@@ -54,7 +54,7 @@ GOWORK=off make check
 GOWORK=off make vulncheck
 GOWORK=off make licenses
 GOWORK=off make check-licenses
-GOWORK=off make dist VERSION=client-qualified
+GOWORK=off make dist DIST_VERSION=0.0.0-client-qualified
 ```
 
 Command tests cover text/JSON, API ambiguity and selection, request paths/selectors, permissions, pagination and candidate

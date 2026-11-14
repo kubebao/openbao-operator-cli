@@ -1,0 +1,142 @@
+name: Release
+
+# A tag push never publishes. Rehearsals are the default manual operation.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing semantic version tag on main (v0.1.0 or v0.1.0-rc.1)
+        required: true
+        type: string
+      publish:
+        description: Publish after approval (requires CLI_RELEASES_ENABLED=true and a public repository)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.ref == 'refs/heads/main' && (!inputs.publish || (vars.CLI_RELEASES_ENABLED == 'true' && !github.event.repository.private)) }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.publish && 'release' || 'release-rehearsal' }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release identity and publication policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          KUBEBAO_PUBLISH: ${{ inputs.publish }}
+          CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
+        run: python3 scripts/release_policy.py "$TAG"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Validate source and packaging
+        run: make check vulncheck check-licenses release-check
+      - name: Build rehearsal artifacts
+        if: ${{ !inputs.publish }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: make dist DIST_VERSION="${TAG#v}-rehearsal"
+      - name: Build signed release artifacts
+        if: ${{ inputs.publish }}
+        env:
+          KUBEBAO_NOTARIZE: "true"
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: make release-dist
+      - name: Verify and stage artifacts
+        run: |
+          make verify-dist
+          python3 scripts/stage_release.py dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-release-payload
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  runtime:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: cli-release-payload
+          path: payload
+      - name: Verify native executable and plugin entry point
+        run: python3 scripts/verify_dist.py payload --smoke --krew
+      - name: Verify Apple signature and notarization
+        if: ${{ inputs.publish && runner.os == 'macOS' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          [[ "$arch" != x86_64 ]] || arch=amd64
+          archive=(payload/*_darwin_"$arch".tar.gz)
+          mkdir signed-binary
+          tar -xzf "${archive[0]}" -C signed-binary kubebao
+          codesign --verify --strict --verbose=2 signed-binary/kubebao
+          spctl --assess --type execute --verbose=2 signed-binary/kubebao
+
+  publish:
+    if: ${{ inputs.publish && vars.CLI_RELEASES_ENABLED == 'true' && !github.event.repository.private }}
+    needs: [build, runtime]
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: cli-release-payload
+          path: payload
+      - name: Verify payload
+        run: python3 scripts/verify_dist.py payload
+      - name: Attest the exact public payload
+        id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: payload/*
+      - name: Preserve offline provenance bundle
+        env:
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: cp "$BUNDLE" payload/provenance.sigstore.json
+      - name: Publish verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          KUBEBAO_PUBLISH: "true"
+          CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
+        run: python3 scripts/publish_release.py "$TAG" payload

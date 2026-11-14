@@ -1,4 +1,4 @@
-.PHONY: install lint lint-fix test check build dist vulncheck licenses check-licenses
+.PHONY: install lint lint-fix test check build dist release-dist release-check verify-dist vulncheck licenses check-licenses
 
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 
@@ -6,7 +6,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --verify HEAD 2>/dev/null || echo unknown)
 BUILDINFO = github.com/kubebao/openbao-operator-cli/internal/buildinfo
 LDFLAGS = -s -w -X $(BUILDINFO).Version=$(VERSION) -X $(BUILDINFO).Commit=$(COMMIT)
-DIST_PLATFORMS ?= linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+DIST_VERSION ?= 0.0.0-dev
 
 install:
 	go mod download
@@ -28,7 +28,17 @@ build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/kubebao ./cmd/kubebao
 
 dist:
-	./scripts/dist.sh "$(VERSION)" "$(COMMIT)" $(DIST_PLATFORMS)
+	./scripts/dist.sh snapshot "$(DIST_VERSION)"
+
+release-dist:
+	./scripts/dist.sh release
+
+release-check:
+	./scripts/release-tool.sh goreleaser check
+	python3 -m unittest discover -s scripts -p 'test_*.py'
+
+verify-dist:
+	python3 scripts/verify_dist.py dist --smoke --krew
 
 vulncheck:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

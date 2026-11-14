@@ -27,7 +27,10 @@
 | `make vulncheck` | Checks reachable Go and standard-library vulnerabilities |
 | `make licenses` | Regenerates `THIRD_PARTY_LICENSES` for linked dependencies |
 | `make check-licenses` | Checks the generated dependency notices for drift |
-| `make dist` | Builds four local distribution archives and SHA-256 checksums |
+| `make dist` | Builds four snapshot archives, SPDX SBOMs, checksums, and package metadata |
+| `make release-dist` | Builds artifacts from a clean version tag without publishing |
+| `make release-check` | Checks GoReleaser configuration and release safety tests |
+| `make verify-dist` | Verifies artifact contents and exercises the current host's archive |
 
 The module requires Go 1.27.4. With `GOTOOLCHAIN=auto`, the Go command selects a compatible toolchain. The Makefile pins
 golangci-lint to `v2.14.0`, govulncheck to `v1.9.0`, and go-licenses to `v2.0.1`.
@@ -42,13 +45,30 @@ By default, Make derives the version from `git describe` and the commit from Git
 ```sh
 make build VERSION=0.0.0-dev COMMIT=local
 ./bin/kubebao version --output json
-make dist VERSION=0.0.0-dev COMMIT=local
+make dist DIST_VERSION=0.0.0-dev
+make verify-dist
 ```
 
-The default platforms are `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`. Set `DIST_PLATFORMS` to select
-a subset and `DIST_DIR` to change the output directory. Each archive contains `kubebao`, `LICENSE`, and
-`THIRD_PARTY_LICENSES`. `checksums.txt` covers the archives from that invocation. Cross-compilation establishes build
-coverage; it does not establish runtime or operator compatibility qualification.
+GoReleaser is the distribution build implementation. `scripts/release-tool.sh` downloads GoReleaser `2.20.2` and Syft
+`1.57.1` into ignored `.local/release-tools` directories. Verification also uses Krew `0.5.0`. SHA-256 pins cover each
+Linux/macOS amd64/arm64 tool archive.
+The first invocation requires network access, `curl`, `tar`, and `shasum`. Packaging verification requires Python 3.
+
+The platforms are `linux/amd64`, `linux/arm64`, `darwin/amd64`, and `darwin/arm64`. Each archive contains `kubebao`,
+`LICENSE`, and `THIRD_PARTY_LICENSES` at its root. Each SPDX SBOM describes the compiled binary and records its hash.
+`dist/checksums.txt` covers all four archives and all four SBOMs. Package metadata is generated at
+`dist/homebrew/Casks/kubebao.rb` and `dist/krew/kubebao.yaml`. Snapshot URLs describe proposed artifacts; no corresponding
+release exists. `make dist` replaces `dist/` and never publishes.
+
+`DIST_VERSION` must be a semantic prerelease version. Distribution builds embed the actual source commit; `COMMIT`
+overrides apply only to `make build`. Snapshot builds can include uncommitted changes and do not qualify as release
+builds. GoReleaser, Homebrew, and Krew publication are disabled in `.goreleaser.yaml`.
+
+`make verify-dist` checks checksums, archive entries, executable permissions, SBOM binary hashes and dependencies, and
+package versions and archive references. It executes the current host's archived binary with an absent kubeconfig.
+It checks standalone and plugin help, version JSON, and error exit codes. It installs the generated manifest and local
+archive into a temporary Krew root. If kubectl is on `PATH`, it also checks real kubectl plugin forwarding through that
+installation. Cross-compilation and these offline checks do not establish operator compatibility.
 
 ## Continuous integration
 
@@ -56,8 +76,13 @@ GitHub Actions is currently disabled during initial development. Run the Make ch
 
 When Actions is enabled, the Check workflow runs on pull requests, pushes to `main`, and merge groups. It runs Go checks,
 vulnerability analysis,
-dependency notice verification, and four-platform archive builds. Archives are retained as workflow artifacts. No
-workflow publishes a release or deploys an environment.
+dependency notice verification, and four-platform archive builds and verification. Generated artifacts are retained as
+workflow artifacts. Ordinary checks never publish.
+
+The manual Release workflow defaults to a rehearsal. Public publication requires a separate repository gate, signing
+credentials, immutable releases, and a protected environment. Its runtime matrix executes the same archived binaries
+on all four platforms. Package promotion has a separate gate and opens PRs without merging them. These workflows do
+not run while Actions remains disabled. See [release procedures](releases.md).
 
 Actions are pinned to commit SHAs. Dependabot proposes weekly Go and GitHub Actions updates.
 
