@@ -70,12 +70,6 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114090502-4e696c784bfa h1:BGFAIEYpjfJBrUdIjorNCNsCmfJLxSSUYW2vA0vw7DI=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114090502-4e696c784bfa/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114113918-df9f0b658db1 h1:uI+qCX/WhwTkijdmhzN0zsLtPvkcaZToSuQnfpP1TwI=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114113918-df9f0b658db1/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114114115-f5819de15ec0 h1:7UwQBjoIR1eZzvthEyJRjfzDZJsd9odoygLZCk2nlp4=
-github.com/kubebao/openbao-operator-client v0.2.1-0.20261114114115-f5819de15ec0/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
 github.com/kubebao/openbao-operator-client v0.2.1-0.20261114115514-8981014162d0 h1:jLyre2dtCKBph+lecVACcTiXuvCx95SztEfB3gv5G6g=
 github.com/kubebao/openbao-operator-client v0.2.1-0.20261114115514-8981014162d0/go.mod h1:C7SRTMeOH72zSKJMhOuUU3o0plUpAjH2a57eyk0OnGM=
 github.com/lucasb-eyer/go-colorful v1.4.1 h1:1EO+WB73+EH8EVbzlrG3KLAfEypQWVHIBqlTf+2hNss=

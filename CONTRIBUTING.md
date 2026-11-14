@@ -9,6 +9,7 @@ make check
 ```
 
 Run `make lint-fix` to apply Go formatting and supported lint fixes. Run `make vulncheck` after dependency changes.
+Run `go mod tidy` after dependency changes; CI rejects drift in `go.mod` and `go.sum`.
 Regenerate dependency notices with `make licenses`, then verify them with `make check-licenses`.
 
 Use pull requests for changes to public `main`; required checks and review conversations must pass before merging.
