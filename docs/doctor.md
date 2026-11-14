@@ -51,7 +51,7 @@ the analysis reference time. No separate rule-set version is required.
 | `KBAO-CLUSTER-001` | Current resource and Available-condition acknowledgement |
 | `KBAO-CLUSTER-002` | Current-generation sealed-state observation |
 | `KBAO-GENERATION-001` | Stale or inconsistent operator generation acknowledgement |
-| `KBAO-CONDITION-001` | Recognized adverse operator conditions, including integration conditions |
+| `KBAO-CONDITION-001` | Recognized adverse operator conditions, named by type; read-replica conditions need configured read replicas |
 | `KBAO-CONTROLLER-001` | Recorded workload or administrative controller errors |
 | `KBAO-BACKUP-001` | Recorded consecutive backup failures |
 | `KBAO-BACKUP-002` | Configured backups with no recorded successful completion |
@@ -84,7 +84,12 @@ maintenance propagation, OpenBao transactions, or quorum safety.
 
 Backup-age evaluation requires a positive duration such as `--max-backup-age 48h`. The CLI does not select the age rule
 when this option is omitted. The policy still records the shared library's unused default duration in that case.
-Configuration does not prove that backup storage or provider permissions work. Missing failure counters remain unknown.
+Configuration does not prove that backup storage or provider permissions work. The client implies a zero failure counter
+only when the recorded success is at or after the last attempt, so the latest attempt succeeded. Other missing failure
+counters remain unknown.
+
+`EtcdEncryptionWarning=True` is an `info` finding. The operator sets it on every cluster because it cannot inspect the
+API server's encryption configuration; the finding remains after encryption at rest is enabled.
 
 ## Output and process results
 
@@ -111,9 +116,11 @@ Incomplete diagnosis takes precedence over findings. Reports go to standard outp
 a short message to standard error. Exit code `1` prefixes it with `Error:`; findings and incomplete results do not.
 Resource names and approved operational metadata remain in the evidence.
 
-Text output starts with a verdict, severity counts, and rule coverage counts. Findings are ordered by severity. Each
+Text output starts with a verdict, severity counts, and rule coverage counts. Info findings count as notes. Findings are ordered by severity. Each
 shows the rule's check name and ID, the shared summary, the suggested check, and a read-only `kubectl describe` command for
-the first referenced resource. Rules without enough evidence are listed with the reasons. A resource tree shows the
+the first referenced resource. Condition findings are titled by condition type and suggest a `kubectl get` with a
+JSONPath that prints only that condition, including the operator's message, which kubebao does not project. Rules
+without enough evidence are listed with the reasons; condition gaps name each `Unknown` or unacknowledged condition. A resource tree shows the
 cluster, its StatefulSets, their Pods, and restores. Placement follows recorded owner UIDs only; names and labels never
 place a node. Offline reports have no tree because legacy related-resource projections are absent. `--verbose` adds
 evidence references, container states, unverified candidates, every collection step, and a rule coverage table.

@@ -27,13 +27,15 @@ times, and interpretation limits. Provider messages are excluded from text, verb
 remain empty for layout compatibility. A separate local-text projection policy is not implemented.
 
 Text output starts with a verdict derived from the attention entries: no issues reported, needs attention, or checks that
-lack evidence. It never reports health that the operator did not report. Values follow in Cluster, Controls, and
+lack evidence. Info attention entries are listed as notes and do not change the verdict. Attention entries carry a
+`severity` in JSON. It never reports health that the operator did not report. Values follow in Cluster, Controls, and
 Operations sections. The default view omits optional fields that the operator does not report, such as an absent
 restore hold or operation lock; `--verbose` shows every field, a conditions table, and the collection steps.
 Timestamps show their age relative to collection time.
 
 Normalized evidence distinguishes missing values from malformed values. The inspected adapter can interpret documented zero
-omission for ready replicas after current resource acknowledgement. An omitted backup failure counter remains unknown.
+omission for ready replicas after current resource acknowledgement. An omitted backup failure counter is implied zero
+only when the recorded success is at or after the last attempt; otherwise it remains unknown.
 A matching resource generation does not acknowledge every condition. Missing, stale, and inconsistent condition
 acknowledgement cannot establish a current finding. Collection time and transition time are separate; neither proves a
 recent operator heartbeat. Service-registration labels are not independent health probes.
@@ -80,7 +82,7 @@ kubeconfig failures produce no status report. Version output has a separate JSON
 `kubebao list` lists OpenBaoClusters in the selected namespace. `--all-namespaces` (`-A`) lists every namespace. The
 command uses the same API selection as status, then one bounded LIST of at most 1,000 clusters in 16 pages. Each listed
 cluster is projected and evaluated with the same status rules, so the ATTENTION column matches the verdict of
-`kubebao status`. Rows are sorted by namespace and name. The command reads no Pods, StatefulSets, or restores.
+`kubebao status`. Info findings, such as the etcd encryption advisory, appear as notes and do not count as issues. Rows are sorted by namespace and name. The command reads no Pods, StatefulSets, or restores.
 
 JSON uses `schemaVersion: "v1"` with `resultCode`, `exitCode`, collection times, `target`, `allNamespaces`, `clusters`,
 and `collection`. Each cluster has `namespace`, `name`, `uid`, `observation`, and an optional `validationPath` when its

@@ -90,3 +90,50 @@ func TestBlockedMaintenanceSuggestsAnExplicitResume(t *testing.T) {
 		t.Fatalf("blocked maintenance text: exit %d; stdout %s", code, text)
 	}
 }
+
+// operatorAdvisoryCluster mirrors a healthy cluster: no read replicas, the permanent etcd advisory, an unverified
+// user-access condition, and a successful latest backup with the omitted zero failure count.
+const operatorAdvisoryCluster = `{"apiVersion":"openbao.org/v1alpha1","kind":"OpenBaoCluster",
+	"metadata":{"name":"prod","namespace":"context-namespace","uid":"uid-1","resourceVersion":"42","generation":3},
+	"spec":{"version":"2.6.4","replicas":3,"backup":{"schedule":"@daily"}},
+	"status":{"observedGeneration":3,"readyReplicas":3,
+	"backup":{"lastBackupTime":"2026-01-01T00:00:09Z","lastAttemptTime":"2026-01-01T00:00:00Z"},
+	"conditions":[
+		{"type":"Available","status":"True","reason":"AllReplicasReady","observedGeneration":3},
+		{"type":"EtcdEncryptionWarning","status":"True","reason":"EtcdEncryptionUnknown","observedGeneration":3},
+		{"type":"OpenBaoSealed","status":"False","reason":"Unsealed","observedGeneration":3},
+		{"type":"ReadReplicasReady","status":"False","reason":"NoReadReplicasConfigured","observedGeneration":3},
+		{"type":"UserAccessBootstrap","status":"Unknown","reason":"UserAccessUnverified","observedGeneration":3}]}}`
+
+func TestStatusSeparatesAdvisoriesFromIssuesAndNamesConditionGaps(t *testing.T) {
+	t.Parallel()
+	server := statusServer(t, "context-namespace", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(operatorAdvisoryCluster))
+	})
+	var stdout, stderr bytes.Buffer
+	if code := Execute(context.Background(), []string{"status", "prod", "--kubeconfig", statusConfig(t, server.URL)}, &stdout,
+		&stderr); code != 0 {
+		t.Fatalf("exit %d; stderr %s", code, &stderr)
+	}
+	text := stdout.String()
+	for _, want := range []string{
+		"? No issues reported, but some checks lack evidence",
+		"• The operator cannot verify that the Kubernetes API server encrypts Secrets at rest in etcd.",
+		"? Operator conditions: UserAccessBootstrap is Unknown  KBAO-CONDITION-001",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"Needs attention", "ReadReplicasReady", "Backup failures"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("unexpected %q in:\n%s", unwanted, text)
+		}
+	}
+	stdout.Reset()
+	if code := Execute(context.Background(), []string{"status", "prod", "-o", "json", "--kubeconfig", statusConfig(t, server.URL)},
+		&stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), `"severity":"info"`) ||
+		!strings.Contains(stdout.String(), `"consecutiveFailures":{"state":"implied","value":0}`) {
+		t.Fatalf("JSON lacks attention severity or the implied failure count: %s", &stdout)
+	}
+}

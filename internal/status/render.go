@@ -33,7 +33,7 @@ func WriteText(writer io.Writer, report evidence.Snapshot, options TextOptions) 
 		if options.ValidationPath != "" {
 			writeRejected(&b, options.ValidationPath)
 		} else {
-			writeVerdict(&b, report.Target, o, options)
+			writeVerdict(&b, report, options)
 		}
 		writeObservation(&b, report, options)
 	} else {
@@ -76,15 +76,9 @@ func writeRejected(b *strings.Builder, path string) {
 }
 
 // writeVerdict summarizes selected rule results. It never claims health the operator did not report.
-func writeVerdict(b *strings.Builder, target evidence.Target, o *evidence.Observation, options TextOptions) {
-	issues, gaps := []evidence.Attention{}, []evidence.Attention{}
-	for _, item := range o.Attention {
-		if strings.HasSuffix(item.Code, "_incomplete") {
-			gaps = append(gaps, item)
-		} else {
-			issues = append(issues, item)
-		}
-	}
+func writeVerdict(b *strings.Builder, report evidence.Snapshot, options TextOptions) {
+	target, o := report.Target, report.Observation
+	issues, notes, gaps := splitAttention(o.Attention)
 	tone, label := render.Good, "No issues reported by the operator"
 	switch {
 	case len(issues) > 0:
@@ -93,16 +87,19 @@ func writeVerdict(b *strings.Builder, target evidence.Target, o *evidence.Observ
 		tone, label = render.Unknown, "No issues reported, but some checks lack evidence"
 	}
 	b.WriteString("\n" + render.Status(tone, label) + "\n")
-	for _, item := range issues {
-		b.WriteString(render.Item(render.Warn, item.Summary, options.Width, "  ") + "\n")
+	for _, item := range append(issues, notes...) {
+		b.WriteString(render.Item(attentionTone(item), item.Summary, options.Width, "  ") + "\n")
 		if options.Verbose && item.Field != "" {
 			b.WriteString(render.Faint("    field: "+item.Field) + "\n")
 		}
 	}
 	for _, item := range gaps {
 		rule := strings.TrimSuffix(item.Code, "_incomplete")
-		b.WriteString("  " + render.Symbol(render.Unknown) + " " + doctor.RuleTitle(rule) + ": not enough evidence to evaluate  " +
-			render.Faint(rule) + "\n")
+		why := "not enough evidence to evaluate"
+		if conditionGaps := doctor.ConditionGaps(report); rule == "KBAO-CONDITION-001" && len(conditionGaps) > 0 {
+			why = strings.Join(conditionGaps, "; ")
+		}
+		b.WriteString(render.Item(render.Unknown, doctor.RuleTitle(rule)+": "+why+"  "+render.Faint(rule), options.Width, "  ") + "\n")
 	}
 	if len(issues) > 0 {
 		b.WriteString(render.NextCommand("Check StatefulSets, Pods, and restores:", followUp("kubebao doctor", target), "  "))
@@ -434,4 +431,31 @@ func followUp(base string, target evidence.Target) string {
 		parts = append(parts, "--context", target.Context)
 	}
 	return strings.Join(parts, " ")
+}
+
+// splitAttention separates findings that need action from informational notes and from incomplete evaluations.
+func splitAttention(items []evidence.Attention) ([]evidence.Attention, []evidence.Attention, []evidence.Attention) {
+	issues, notes, gaps := []evidence.Attention{}, []evidence.Attention{}, []evidence.Attention{}
+	for _, item := range items {
+		switch {
+		case strings.HasSuffix(item.Code, "_incomplete"):
+			gaps = append(gaps, item)
+		case item.Severity == "info":
+			notes = append(notes, item)
+		default:
+			issues = append(issues, item)
+		}
+	}
+	return issues, notes, gaps
+}
+
+func attentionTone(item evidence.Attention) render.Tone {
+	switch item.Severity {
+	case "info":
+		return render.Info
+	case "error":
+		return render.Bad
+	default:
+		return render.Warn
+	}
 }

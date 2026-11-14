@@ -137,14 +137,8 @@ func attention(r ListRow) string {
 	if r.Rejected {
 		return render.Paint(render.Bad, "✗ cannot interpret")
 	}
-	issues, gaps := 0, 0
-	for _, item := range r.Observation.Attention {
-		if strings.HasSuffix(item.Code, "_incomplete") {
-			gaps++
-		} else {
-			issues++
-		}
-	}
+	issueItems, noteItems, gapItems := splitAttention(r.Observation.Attention)
+	issues, notes, gaps := len(issueItems), len(noteItems), len(gapItems)
 	switch {
 	case issues == 1:
 		return render.Paint(render.Warn, "! 1 issue")
@@ -152,6 +146,10 @@ func attention(r ListRow) string {
 		return render.Paint(render.Warn, fmt.Sprintf("! %d issues", issues))
 	case gaps > 0:
 		return render.Paint(render.Unknown, "? evidence incomplete")
+	case notes == 1:
+		return render.Paint(render.Info, "• 1 note")
+	case notes > 1:
+		return render.Paint(render.Info, fmt.Sprintf("• %d notes", notes))
 	default:
 		return render.Paint(render.Good, "✓ none reported")
 	}

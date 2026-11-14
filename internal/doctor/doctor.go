@@ -22,8 +22,10 @@ const (
 )
 
 type Finding struct {
-	ID              string               `json:"id"`
-	RuleID          string               `json:"ruleID"`
+	ID     string `json:"id"`
+	RuleID string `json:"ruleID"`
+	// Subsubject names the part of the subject a finding concerns, such as a condition type.
+	Subsubject      string               `json:"subsubject,omitempty"`
 	Severity        Severity             `json:"severity"`
 	Summary         string               `json:"summary"`
 	Description     string               `json:"description"`
@@ -160,11 +162,12 @@ func Analyze(snapshot evidence.Snapshot, policy diagnose.Policy) (Report, error)
 				sum[:16],
 			),
 			RuleID:          string(f.Rule),
+			Subsubject:      f.Subsubject,
 			Severity:        severity,
 			Summary:         f.Subject.Kind + " " + f.Subject.Namespace + "/" + f.Subject.Name,
 			Description:     f.Summary,
 			Evidence:        []evidence.Reference{},
-			SuggestedChecks: []string{suggestedCheck(f.Rule)},
+			SuggestedChecks: []string{suggestedCheck(f.Rule, f.Subsubject)},
 			MissingEvidence: append([]string{}, missing[f.Rule]...),
 		}
 		for _, ref := range f.References {
@@ -191,7 +194,10 @@ func stringValue(value shared.Text) string {
 	return *value.Value
 }
 
-func suggestedCheck(rule diagnose.RuleID) string {
+func suggestedCheck(rule diagnose.RuleID, subsubject string) string {
+	if rule == diagnose.RuleCondition {
+		return conditionCheck(subsubject)
+	}
 	switch rule {
 	case diagnose.RuleAvailability:
 		return "Inspect current resource and Available condition acknowledgement."
@@ -217,11 +223,9 @@ func StatusAttention(snapshot evidence.Snapshot) ([]evidence.Attention, error) {
 	}
 	result := []evidence.Attention{}
 	for _, f := range report.Findings {
-		field := ""
-		if len(f.Evidence) > 0 {
-			field = f.Evidence[0].Field
-		}
-		result = append(result, evidence.Attention{Code: f.RuleID, Summary: f.Description, Field: field})
+		result = append(result, evidence.Attention{
+			Code: f.RuleID, Severity: string(f.Severity), Summary: f.Description, Field: specificField(f.Evidence),
+		})
 	}
 	for _, c := range report.Coverage {
 		if c.State == "insufficient_evidence" {
@@ -232,4 +236,36 @@ func StatusAttention(snapshot evidence.Snapshot) ([]evidence.Attention, error) {
 		}
 	}
 	return result, nil
+}
+
+// conditionCheck suggests the next step for a recognized operator condition.
+func conditionCheck(condition string) string {
+	switch condition {
+	case "EtcdEncryptionWarning":
+		return "Confirm that the Kubernetes API server encrypts Secrets at rest with an encryption configuration. " +
+			"The operator cannot check this; the advisory remains after encryption is enabled."
+	case "Degraded":
+		return "Read the condition's reason and message, then inspect recent events for the OpenBaoCluster."
+	case "SecurityRisk", "NodeSecurityCapabilityMismatch":
+		return "Read the condition's message; it names the security guardrail that is not enforced."
+	case "TLSReady", "ACMEIntegrationReady", "ACMECacheReady":
+		return "Read the condition's message and inspect the TLS or ACME configuration and its certificate Secrets."
+	case "BackupConfigurationReady":
+		return "Read the condition's message and inspect the backup target and its credentials reference."
+	case "ReadReplicaStorageConfigured", "ReadReplicasReady", "ReadServingAvailable", "ReadReplicasAutopilotHealthy":
+		return "Inspect the read-replica StatefulSet, its Pods, and their storage."
+	default:
+		return "Read the condition's reason and message on the OpenBaoCluster."
+	}
+}
+
+// specificField prefers the most specific referenced field over generation acknowledgement.
+func specificField(refs []evidence.Reference) string {
+	field := ""
+	for _, ref := range refs {
+		if field == "" || field == "metadata.generation" {
+			field = ref.Field
+		}
+	}
+	return field
 }

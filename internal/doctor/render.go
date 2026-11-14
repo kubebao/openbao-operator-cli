@@ -87,7 +87,7 @@ func writeSummary(b *strings.Builder, report Report, resultCode string) {
 	parts := []string{}
 	for _, s := range []Severity{Error, Warning, Info} {
 		if counts[s] > 0 {
-			parts = append(parts, plural(counts[s], string(s)))
+			parts = append(parts, plural(counts[s], map[Severity]string{Error: "error", Warning: "warning", Info: "note"}[s]))
 		}
 	}
 	gaps := 0
@@ -139,6 +139,9 @@ func writeFindings(b *strings.Builder, report Report, target evidence.Target, op
 	for _, f := range findings {
 		tone := severityTone(f.Severity)
 		subject := strings.Replace(f.Summary, " "+target.Namespace+"/", " ", 1)
+		if f.RuleID == "KBAO-CONDITION-001" && f.Subsubject != "" {
+			subject = f.Subsubject
+		}
 		b.WriteString("\n" + render.Status(tone, strings.ToUpper(string(f.Severity))) + "  " +
 			render.Bold(RuleTitle(f.RuleID)+": "+subject) + "  " + render.Faint(f.RuleID) + "\n")
 		b.WriteString(render.Wrap(f.Description, options.Width, "  ") + "\n")
@@ -146,7 +149,11 @@ func writeFindings(b *strings.Builder, report Report, target evidence.Target, op
 			b.WriteString(render.Wrap(check, options.Width, "  ") + "\n")
 		}
 		if command := kubectlCommand(f.Evidence, target); command != "" {
-			b.WriteString(render.NextCommand("Inspect it:", command, "  "))
+			label := "Inspect it:"
+			if strings.Contains(command, "jsonpath=") {
+				label = "Show the condition with the operator's message:"
+			}
+			b.WriteString(render.NextCommand(label, command, "  "))
 		}
 		if options.Verbose {
 			for _, ref := range f.Evidence {
@@ -157,7 +164,9 @@ func writeFindings(b *strings.Builder, report Report, target evidence.Target, op
 	}
 }
 
-// kubectlCommand suggests a read-only command for the first referenced resource.
+// kubectlCommand suggests a read-only command for the first referenced resource. An OpenBaoCluster condition reference
+// prints only that condition, including the operator's message, which kubebao does not project. Other resources use
+// describe, which also shows their events.
 func kubectlCommand(refs []evidence.Reference, target evidence.Target) string {
 	if len(refs) == 0 || refs[0].Name == "" {
 		return ""
@@ -174,6 +183,13 @@ func kubectlCommand(refs []evidence.Reference, target evidence.Target) string {
 	if ref.Namespace != "" {
 		parts = append(parts, "-n", ref.Namespace)
 	}
+	for _, candidate := range refs {
+		condition, found := strings.CutPrefix(candidate.Field, "status.conditions[type=")
+		if found && strings.HasSuffix(condition, "]") && candidate.Name == ref.Name && ref.Kind == "OpenBaoCluster" {
+			jsonpath := `'{.status.conditions[?(@.type=="` + strings.TrimSuffix(condition, "]") + `")]}'`
+			return strings.Join(append(parts, "get", resource, ref.Name, "-o", "jsonpath="+jsonpath), " ")
+		}
+	}
 	return strings.Join(append(parts, "describe", resource, ref.Name), " ")
 }
 
@@ -182,7 +198,7 @@ func writeGaps(b *strings.Builder, report Report) {
 	for _, c := range report.Coverage {
 		if c.State == "insufficient_evidence" {
 			rows = append(rows, []string{
-				render.Symbol(render.Unknown) + " " + RuleTitle(c.RuleID), MissingReasons(c.MissingEvidence),
+				render.Symbol(render.Unknown) + " " + RuleTitle(c.RuleID), gapReason(report.Evidence, c),
 				render.Faint(c.RuleID),
 			})
 		}
@@ -262,4 +278,12 @@ func orNone(value string) string {
 		return "no field"
 	}
 	return value
+}
+
+// gapReason explains insufficient coverage. Condition gaps name the conditions that blocked evaluation.
+func gapReason(snapshot evidence.Snapshot, coverage RuleCoverage) string {
+	if gaps := ConditionGaps(snapshot); coverage.RuleID == "KBAO-CONDITION-001" && len(gaps) > 0 {
+		return strings.Join(gaps, "; ")
+	}
+	return MissingReasons(coverage.MissingEvidence)
 }

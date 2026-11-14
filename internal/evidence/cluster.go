@@ -152,7 +152,9 @@ type LegacyRestore struct {
 
 // Attention maps selected shared rule findings and incomplete coverage for status.
 type Attention struct {
-	Code    string `json:"code"`
-	Summary string `json:"summary"`
-	Field   string `json:"field"`
+	Code string `json:"code"`
+	// Severity is info, warning, or error for rule findings, and empty for incomplete evaluation.
+	Severity string `json:"severity,omitempty"`
+	Summary  string `json:"summary"`
+	Field    string `json:"field"`
 }

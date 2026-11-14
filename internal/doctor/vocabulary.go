@@ -4,6 +4,9 @@ import (
 	"strings"
 
 	"github.com/kubebao/openbao-operator-client/diagnose"
+	shared "github.com/kubebao/openbao-operator-client/evidence"
+
+	"github.com/kubebao/openbao-operator-cli/internal/evidence"
 
 	"github.com/kubebao/openbao-operator-cli/internal/render"
 )
@@ -109,4 +112,27 @@ func MissingReasons(reasons []string) string {
 		phrases = append(phrases, MissingReason(reason))
 	}
 	return strings.Join(phrases, "; ")
+}
+
+// ConditionGaps names the recognized conditions that kept KBAO-CONDITION-001 from a complete evaluation:
+// an Unknown status, or a condition the operator has not acknowledged for the current generation.
+func ConditionGaps(snapshot evidence.Snapshot) []string {
+	if snapshot.NormalizedEvidence == nil || len(snapshot.NormalizedEvidence.Clusters) != 1 {
+		return nil
+	}
+	cluster := snapshot.NormalizedEvidence.Clusters[0].Observation
+	if cluster == nil || cluster.Conditions.State != shared.ValueReported {
+		return nil
+	}
+	gaps := []string{}
+	for _, condition := range cluster.Conditions.Values {
+		switch {
+		case !diagnose.RecognizedCondition(condition.Type):
+		case condition.Acknowledgement(cluster.Generation) != shared.GenerationCurrent:
+			gaps = append(gaps, condition.Type+" is not acknowledged for the current generation")
+		case condition.Status == shared.ConditionUnknown:
+			gaps = append(gaps, condition.Type+" is Unknown")
+		}
+	}
+	return gaps
 }

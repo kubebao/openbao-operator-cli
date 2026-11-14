@@ -72,7 +72,7 @@ Exact client, CLI, operator, image, and CRD identities belong in qualification p
 
 The inspected contracts cover legacy operator `0.6.1` and native candidate
 `22894cdc0a4aa5c442a07f2bf9902fe28ce02ea1`. The native contract does not qualify a released native operator.
-The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/4e696c784bfa7133455fea139ace51ec45480e0d/docs/compatibility.md)
+The shared client's [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/f5819de15ec07feb066b1c421045c75b37af0648/docs/compatibility.md)
 describes the operator fixtures and validation limits. API discovery alone does not qualify another operator build.
 
 Control qualification uses disposable Kubernetes 1.36.1 clusters on Linux/arm64 with OpenBao 2.7.2, self-initialization,
@@ -127,7 +127,7 @@ and invalid source values do not enter the diagnostic message.
 ## Rolling-restart qualification boundary
 
 Runtime restart qualification covers native operator `0.7.0-rc.1`, source
-`7b9bbf8b1a2aa3a62e2235607073df3e912643b5`, in a disposable local Kind cluster. The CLI pins public client
+`7b9bbf8b1a2aa3a62e2235607073df3e912643b5`, in a disposable local Kind cluster. Qualification used public client
 `v0.2.1-0.20261114090502-4e696c784bfa` with `GOWORK=off` and no replacements. Tests cover one voter, three voters with one
 steady read replica, and one voter with a configured zero-replica read pool.
 
