@@ -1,15 +1,26 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/kubebao-logo-dark.webp">
+  <img src="docs/images/kubebao-logo.webp" alt="KubeBao" width="160">
+</picture>
+
 # kubebao
 
-`kubebao` is the companion CLI for the [OpenBao Operator](https://github.com/kubebao/openbao-operator). It shows what
-the operator reports about your OpenBao clusters, diagnoses common problems, packages evidence for support, and submits
-guarded pause, maintenance, and restart requests.
+**A command-line tool to inspect, diagnose, and control clusters managed by the
+[OpenBao Operator](https://github.com/kubebao/openbao-operator).**
 
-It works through your kubeconfig and the Kubernetes API. It never reads Secrets, never contacts OpenBao directly, and
-changes a cluster only when you run a control command.
+[![Check](https://github.com/kubebao/openbao-operator-cli/actions/workflows/check.yml/badge.svg)](https://github.com/kubebao/openbao-operator-cli/actions/workflows/check.yml)
+[![CodeQL](https://github.com/kubebao/openbao-operator-cli/actions/workflows/codeql.yml/badge.svg)](https://github.com/kubebao/openbao-operator-cli/actions/workflows/codeql.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+[Quick start](#quick-start) • [Install](docs/installation.md) • [Documentation](#documentation) • [Contributing](CONTRIBUTING.md)
+
+</div>
 
 > [!NOTE]
-> `kubebao` is not released yet. Build it from source. Release archives, Homebrew, and Krew are prepared but not
-> published; see [installation](docs/installation.md).
+> **Not released yet.** Build `kubebao` from source. Release archives, Homebrew, and Krew are prepared but not
+> published. See [installation](docs/installation.md).
 
 ```text
 $ kubebao doctor prod -n security
@@ -36,9 +47,34 @@ Resources
       ╰── Pod prod-2  Running · ready
 ```
 
-## Install
+`kubebao` shows what the OpenBao Operator reports about your OpenBao clusters, diagnoses common problems, packages
+evidence for support, and submits guarded pause, maintenance, and restart requests.
 
-Build from source with Go 1.27.4 or newer. With `GOTOOLCHAIN=auto`, Go downloads the required toolchain.
+It works through your kubeconfig and the Kubernetes API. It never reads Secrets, never contacts OpenBao directly, and
+changes a cluster only when you run a control command. The operator owns reconciliation and lifecycle safety.
+
+`kubebao` is maintained by [KubeBao](https://kubebao.org), an independent open-source project. It is not an official
+OpenBao project.
+
+## Features
+
+- **Status at a glance.** `list` shows every `OpenBaoCluster` in a namespace or across all namespaces, with what needs
+  attention. `status` shows what the operator reports for one cluster and can refresh with `--watch`.
+- **Diagnosis, live or offline.** `doctor` checks a cluster and the StatefulSets, Pods, and restores it owns. Each
+  finding has a rule ID and a next step. The same rules run on a support bundle without cluster access.
+- **Support bundles.** `support-bundle` saves the diagnostic evidence and findings to a local archive that you can
+  review before you share it.
+- **Guarded controls.** `pause`, `resume`, `maintenance`, and `restart` each change one field, fail if the cluster
+  changed since it was read, and can wait until the operator acts.
+- **Built for scripts.** Every reporting command has versioned JSON output and documented exit codes.
+
+`kubebao` does not run backups, upgrades, restores, scaling, or installation, and it does not repair clusters
+automatically. Use `bao` for OpenBao administration. Validated operator versions and their limits are in
+[compatibility](docs/compatibility.md).
+
+## Quick start
+
+Build from source with Go 1.27.4 or later. With `GOTOOLCHAIN=auto`, Go downloads the required toolchain.
 
 ```sh
 git clone https://github.com/kubebao/openbao-operator-cli.git
@@ -47,14 +83,8 @@ make build
 ./bin/kubebao version
 ```
 
-To use it as a kubectl plugin, put the binary on your `PATH` as `kubectl-kubebao`, then run `kubectl kubebao`. After
-publication, Homebrew installs `kubebao`, the plugin, and shell completions; Krew installs the plugin. See
-[installation](docs/installation.md) for every channel and for checksum verification.
-
-## Quick start
-
 `kubebao` uses standard kubeconfig loading. Select a file with `--kubeconfig`, a context with `--context`, and a
-namespace with `-n`.
+namespace with `-n`. Replace `prod` and `security` with your cluster name and namespace.
 
 ```sh
 kubebao list -A                          # every OpenBaoCluster and what needs attention
@@ -72,6 +102,18 @@ kubebao restart prod -n security --dry-run
 kubebao restart prod -n security --wait --wait-timeout 10m
 ```
 
+To use `kubebao` as a kubectl plugin, put the binary on your `PATH` as `kubectl-kubebao`, then run `kubectl kubebao`.
+The [installation guide](docs/installation.md) covers every channel, checksum verification, and shell completion.
+
+## Requirements
+
+| Component | Requirement |
+| --- | --- |
+| OpenBao Operator | Clusters managed by the [OpenBao Operator](https://github.com/kubebao/openbao-operator) |
+| Kubernetes | 1.34 or later |
+| Access | A kubeconfig with the [permissions](#permissions) for the commands you run |
+| Build | Go 1.27.4 or later, Make, and Bash |
+
 ## Commands
 
 | Command | What it does | Changes the cluster |
@@ -83,17 +125,17 @@ kubebao restart prod -n security --wait --wait-timeout 10m
 | [`pause`, `resume`](docs/controls.md) | Pauses or resumes operator reconciliation | Yes |
 | [`maintenance enable`, `disable`](docs/controls.md) | Sets maintenance mode | Yes |
 | [`restart`](docs/controls.md#rolling-restart) | Requests an operator-managed rolling restart | Yes |
-| `completion` | Prints a bash, zsh, fish, or PowerShell completion script | No |
+| [`completion`](docs/installation.md#shell-completion) | Prints a bash, zsh, fish, or PowerShell completion script | No |
 | `version` | Prints build information without cluster access | No |
 
 Run `kubebao COMMAND --help` for flags and examples.
 
-## How kubebao stays safe
+## Safety model
 
 - **Read-only by default.** `list`, `status`, `doctor`, and `support-bundle` only read. They never pause a cluster or
   enable maintenance to collect evidence.
-- **Reported, not probed.** Values come from the operator's status and from Kubernetes resources. kubebao does not probe
-  OpenBao, so a report describes what the operator observed, not live serving health.
+- **Reported, not probed.** Values come from the operator's status and from Kubernetes resources. `kubebao` does not
+  probe OpenBao, so a report describes what the operator observed, not live serving health.
 - **Unknown stays unknown.** Evidence that could not be read, or that the operator does not report, is shown as unknown.
   It never counts as healthy.
 - **Ownership by UID.** Related StatefulSets, Pods, and restores are matched through owner references and UIDs, never
@@ -125,7 +167,7 @@ Results go to standard output and errors to standard error.
 
 ## Permissions
 
-kubebao uses your own Kubernetes credentials and needs only these permissions in the selected namespace, plus access
+`kubebao` uses your own Kubernetes credentials. It needs only these permissions in the selected namespace, plus access
 to API discovery for `kubebao.org` or `openbao.org`:
 
 | Command | Permissions |
@@ -138,55 +180,26 @@ to API discovery for `kubebao.org` or `openbao.org`:
 No command needs Secret access, Pod logs, `exec`, or port forwarding. If both `kubebao.org` and `openbao.org` serve
 `OpenBaoCluster`, choose one with `--api-group`.
 
-## Shell completion
-
-```sh
-source <(kubebao completion bash)                                  # bash
-kubebao completion zsh > "${fpath[1]}/_kubebao"                    # zsh
-kubebao completion fish > ~/.config/fish/completions/kubebao.fish  # fish
-```
-
-Completion suggests commands, flag values, kubeconfig contexts, and cluster names in the selected namespace. For
-`kubectl kubebao`, install the `kubectl_complete-kubebao` helper; see [installation](docs/installation.md#shell-completion).
-
 ## Documentation
 
-| Topic | Document |
-| --- | --- |
-| Install channels, kubectl plugin, completion | [Installation](docs/installation.md) |
-| Status, list, watch mode, and interpretation limits | [Status](docs/status.md) |
-| Diagnostic rules, coverage, and evidence gaps | [Diagnosis](docs/doctor.md) |
-| Bundle format, limits, and offline diagnosis | [Support bundles](docs/support-bundles.md) |
-| Pause, maintenance, restart, and observation | [Controls](docs/controls.md) |
-| Scope and design | [Architecture](docs/architecture.md) |
-| Shared client and operator qualification | [Client integration](docs/client-migration.md) |
-| Planned work | [Roadmap](docs/roadmap.md) |
-| Building, testing, and packaging | [Development](docs/development.md) and [releases](docs/releases.md) |
+**Get started:** [install](docs/installation.md) · [observe a cluster](docs/status.md) ·
+[diagnose a cluster](docs/doctor.md)
 
-## Scope
+**Operate:** [collect a support bundle](docs/support-bundles.md) · [pause, maintenance, and restart](docs/controls.md)
 
-The operator owns reconciliation and lifecycle safety. kubebao does not run backups, upgrades, restores, scaling, or
-installation, and it does not repair clusters automatically. Use `bao` for OpenBao administration.
+**Reference:** [architecture and scope](docs/architecture.md) · [compatibility](docs/compatibility.md) ·
+[development](docs/development.md) · [releases](docs/releases.md)
 
-Planned, not yet available:
+## Contributing
 
-- Related-resource evidence in `status`, and qualification against operator releases.
-- Diagnostic evidence for tenants, Jobs, Events, and networking resources.
-- Bounded, optional log collection in support bundles.
-
-## Development
-
-```sh
-make install
-make check        # pinned linters, race tests, and the binary build
-make vulncheck    # after dependency changes
-make dist DIST_VERSION=0.0.0-dev && make verify-dist   # local release archives; never publishes
-```
-
-See [development](docs/development.md) and [contributing](CONTRIBUTING.md) for conventions, and
-[releases](docs/releases.md) for packaging, signing, and publication.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and conventions, and
+[development](docs/development.md) for checks and packaging. Report security issues privately as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-kubebao uses the [Apache License 2.0](LICENSE). Bundled dependency notices are in
+Licensed under the [Apache License 2.0](LICENSE). Third-party notices are in
 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
+
+The KubeBao name and logo identify the KubeBao project. The Apache License 2.0 does not grant permission to use them, as
+stated in section 6 of the license.
