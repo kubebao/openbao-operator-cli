@@ -13,6 +13,11 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+        exclude-patterns: ["actions/attest*", "actions/download-artifact"]
+        update-types: [minor, patch]
+      publishing-actions:
+        patterns: ["actions/attest*", "actions/download-artifact"]
+        update-types: [minor, patch]
 
   - package-ecosystem: gomod
     directory: /

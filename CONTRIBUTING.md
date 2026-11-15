@@ -21,6 +21,9 @@ Commits, such as `feat(status): report observed generation`. Use a conventional 
 Run `make secret-scan` to scan reachable Git history with pinned Gitleaks. The scan redacts detected values.
 Run `make check-workflows` after changing GitHub Actions.
 
+Dependabot groups patch and minor CI action updates separately from actions used only by the release workflow.
+Release action updates need a non-publishing release rehearsal before merging. Major action updates have separate PRs.
+
 Keep changes focused. Explain the resulting behavior, material compatibility or security implications, and the checks
 you ran. Follow the boundaries in [AGENTS.md](AGENTS.md) and the [architecture](docs/architecture.md).
 
