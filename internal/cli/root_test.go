@@ -22,10 +22,11 @@ func TestCommandOutputAndExitCodes(t *testing.T) {
 		{"help flag", []string{"--help"}, 0},
 		{"version flag", []string{"--version"}, 0},
 		{"version command", []string{"version"}, 0},
-		{"unknown command", []string{"status"}, 1},
+		{"unknown command", []string{"unknown-command"}, 1},
 		{"unknown flag", []string{"version", "--unknown"}, 1},
 		{"extra argument", []string{"version", "prod"}, 1},
 		{"invalid output", []string{"version", "--output", "yaml"}, 1},
+		{"invalid color", []string{"version", "--color", "sometimes"}, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,7 +49,7 @@ func TestCommandOutputAndExitCodes(t *testing.T) {
 func TestVersionJSONContract(t *testing.T) {
 	t.Parallel()
 	info := buildinfo.Info{Version: "v0.1.0", Commit: "0123abcd", GoVersion: "go1.27.3", OS: "linux", Arch: "arm64"}
-	command := newCommand(info)
+	command := newCommand(info, &terminal{color: "auto"})
 	var stdout, stderr bytes.Buffer
 	command.SetOut(&stdout)
 	command.SetErr(&stderr)
@@ -71,6 +72,27 @@ func TestVersionJSONContract(t *testing.T) {
 		if result[key] != value {
 			t.Errorf("%s = %q, want %q", key, result[key], value)
 		}
+	}
+}
+
+func TestPluginInvocation(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{{"--help"}, {"status", "--help"}, {"doctor", "--help"}, {"restart", "--help"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			var stdout, stderr bytes.Buffer
+			code := execute(context.Background(), "/plugins/kubectl-kubebao", args, &stdout, &stderr)
+			if code != 0 || stderr.Len() != 0 || !strings.Contains(stdout.String(), "kubectl kubebao") {
+				t.Fatalf("exit code = %d; stdout = %q; stderr = %q", code, &stdout, &stderr)
+			}
+		})
+	}
+	var standalone, plugin, stderr bytes.Buffer
+	args := []string{"version", "--output", "json"}
+	if execute(context.Background(), "kubebao", args, &standalone, &stderr) != 0 ||
+		execute(context.Background(), "kubectl-kubebao", args, &plugin, &stderr) != 0 ||
+		standalone.String() != plugin.String() || stderr.Len() != 0 {
+		t.Fatalf("standalone = %q; plugin = %q; stderr = %q", &standalone, &plugin, &stderr)
 	}
 }
 

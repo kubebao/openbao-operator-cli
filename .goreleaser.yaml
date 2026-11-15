@@ -1,0 +1,116 @@
+version: 2
+project_name: kubebao
+
+env:
+  - CGO_ENABLED=0
+  - GOWORK=off
+
+builds:
+  - id: kubebao-linux
+    main: ./cmd/kubebao
+    binary: kubebao
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Version=v{{ .Version }} -X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Commit={{ .FullCommit }}
+  - id: kubebao-darwin
+    main: ./cmd/kubebao
+    binary: kubebao
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Version=v{{ .Version }} -X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Commit={{ .FullCommit }}
+
+archives:
+  - id: kubebao-linux
+    ids: [kubebao-linux]
+    formats: [tar.gz]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files: &archive_files
+      - LICENSE
+      - THIRD_PARTY_LICENSES
+      # kubectl 1.26+ runs this helper to complete `kubectl kubebao` arguments.
+      - src: packaging/kubectl/kubectl_complete-kubebao
+        strip_parent: true
+        info:
+          mode: 0755
+  - id: kubebao-darwin
+    ids: [kubebao-darwin]
+    formats: [tar.gz]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files: *archive_files
+
+source:
+  enabled: true
+  format: tar.gz
+  name_template: '{{ .ProjectName }}_{{ .Version }}_source'
+  prefix_template: '{{ .ProjectName }}_{{ .Version }}_source/'
+
+sboms:
+  - id: binaries
+    artifacts: binary
+    cmd: ../scripts/release-tool.sh
+    args:
+      - syft
+      - scan
+      - 'file:$artifact'
+      - --source-name=kubebao
+      - '--source-version={{ .Version }}'
+      - '--output=spdx-json=$document'
+    documents:
+      - '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.spdx.json'
+    env:
+      - SYFT_CHECK_FOR_APP_UPDATE=false
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: '{{ .Env.KUBEBAO_VERSION }}'
+
+# Artifact generation never writes to GitHub or package repositories.
+# The manual release workflow publishes the verified files separately.
+release:
+  disable: true
+changelog:
+  disable: true
+
+krews:
+  - name: kubebao
+    ids: [kubebao-linux, kubebao-darwin]
+    repository:
+      owner: kubebao
+      name: krew-index
+    homepage: https://github.com/kubebao/openbao-operator-cli
+    short_description: Diagnose and control OpenBao Operator clusters
+    description: |
+      Report cluster status, diagnose captured observations, collect support
+      bundles, and submit guarded cluster controls through Kubernetes.
+      Offline bundle diagnosis requires no Kubernetes connection.
+    url_template: 'https://github.com/kubebao/openbao-operator-cli/releases/download/v{{ .Version }}/{{ .ArtifactName }}'
+    caveats: |
+      Shell completion for `kubectl kubebao` needs kubectl 1.26 or newer and the
+      kubectl_complete-kubebao helper on PATH. Krew does not link it; copy it once:
+
+        cp "${KREW_ROOT:-$HOME/.krew}/store/kubebao/v{{ .Version }}/kubectl_complete-kubebao" "${KREW_ROOT:-$HOME/.krew}/bin/"
+
+      The helper runs kubectl-kubebao from PATH, so the copy keeps working after upgrades.
+    skip_upload: true
+
+# Developer ID signing and notarization are optional and disabled by default.
+# When requested, they finish before archives, SBOMs, and checksums are generated.
+notarize:
+  macos:
+    - ids: [kubebao-darwin]
+      enabled: '{{ eq .Env.KUBEBAO_NOTARIZE "true" }}'
+      sign:
+        certificate: '{{ .Env.MACOS_SIGN_P12 }}'
+        password: '{{ .Env.MACOS_SIGN_PASSWORD }}'
+      notarize:
+        issuer_id: '{{ .Env.MACOS_NOTARY_ISSUER_ID }}'
+        key_id: '{{ .Env.MACOS_NOTARY_KEY_ID }}'
+        key: '{{ .Env.MACOS_NOTARY_KEY }}'
+        wait: true

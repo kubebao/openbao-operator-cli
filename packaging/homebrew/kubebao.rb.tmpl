@@ -1,0 +1,50 @@
+# Generated from the checksummed source archive. Do not edit release copies.
+require "json"
+
+class Kubebao < Formula
+  desc "Companion CLI for the OpenBao Operator"
+  homepage "https://github.com/kubebao/openbao-operator-cli"
+  url "https://github.com/kubebao/openbao-operator-cli/releases/download/v${version}/${source_archive}"
+  version "${version}"
+  sha256 "${source_sha256}"
+  license "Apache-2.0"
+
+  depends_on "go" => :build
+
+  deny_network_access!
+
+  def fetch
+    ENV["GOWORK"] = "off"
+    system "go", "mod", "download"
+  end
+
+  def install
+    ENV["GOWORK"] = "off"
+    ENV["CGO_ENABLED"] = "0"
+    ENV["GOTOOLCHAIN"] = "local"
+    ldflags = [
+      "-X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Version=v#{version}",
+      "-X github.com/kubebao/openbao-operator-cli/internal/buildinfo.Commit=${commit}",
+    ]
+    system "go", "build", *std_go_args(ldflags: ldflags), "-mod=readonly", "./cmd/kubebao"
+    # kubectl discovers plugins by name; the same binary adapts its help to `kubectl kubebao`.
+    bin.install_symlink "kubebao" => "kubectl-kubebao"
+    bin.install "packaging/kubectl/kubectl_complete-kubebao"
+    pkgshare.install "LICENSE", "THIRD_PARTY_LICENSES"
+    generate_completions_from_executable(bin/"kubebao", shell_parameter_format: :cobra)
+  end
+
+  test do
+    ENV["KUBECONFIG"] = (testpath/"absent-config").to_s
+    info = JSON.parse(shell_output("#{bin}/kubebao version --output json"))
+    assert_equal "v#{version}", info.fetch("version")
+    assert_equal "${commit}", info.fetch("commit")
+    assert_match "kubebao doctor", shell_output("#{bin}/kubebao doctor --help")
+    assert_match "__start_kubebao", (bash_completion/"kubebao").read
+    assert_match "compdef _kubebao kubebao", (zsh_completion/"_kubebao").read
+    assert_match "kubectl kubebao doctor", shell_output("#{bin}/kubectl-kubebao doctor --help")
+    ENV.prepend_path "PATH", bin
+    assert_match "enable\t", shell_output("#{bin}/kubectl_complete-kubebao maintenance ''")
+    assert_match "Error: unknown command", shell_output("#{bin}/kubebao unknown-command 2>&1", 1)
+  end
+end

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Shell completion helper for the kubectl kubebao plugin (kubectl 1.26 or newer).
+# kubectl runs this file with the words to complete; place it on PATH next to kubectl-kubebao.
+exec kubectl-kubebao __complete "$@"

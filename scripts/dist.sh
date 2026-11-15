@@ -1,48 +1,40 @@
 #!/usr/bin/env bash
-# Builds local archives. This script does not publish releases.
-# Usage: scripts/dist.sh <version> <commit> <os/arch>...
+# Build local artifacts and package metadata. This script never publishes.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if [[ $# -lt 3 ]]; then
-  echo "Usage: scripts/dist.sh <version> <commit> <os/arch>..." >&2
-  exit 1
-fi
-version="$1"
-commit="$2"
-shift 2
-if [[ ! "$version" =~ ^[[:alnum:]][[:alnum:].+_-]*$ ]]; then
-  echo "Version must contain only letters, digits, dots, plus signs, underscores, and hyphens." >&2
-  exit 1
-fi
-for platform in "$@"; do
-  case "$platform" in
-    linux/amd64|linux/arm64|darwin/amd64|darwin/arm64) ;;
-    *) echo "Unsupported distribution platform: $platform" >&2; exit 1 ;;
-  esac
-done
-
-buildinfo=github.com/kubebao/openbao-operator-cli/internal/buildinfo
-destination="${DIST_DIR:-dist}"
-mkdir -p "$destination"
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
-archives=()
-for platform in "$@"; do
-  os="${platform%/*}"
-  arch="${platform#*/}"
-  name="kubebao_${version}_${os}_${arch}"
-  mkdir -p "$work/$name"
-  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
-    -ldflags "-s -w -X ${buildinfo}.Version=${version} -X ${buildinfo}.Commit=${commit}" \
-    -o "$work/$name/kubebao" ./cmd/kubebao
-  cp LICENSE THIRD_PARTY_LICENSES "$work/$name/"
-  tar -C "$work" -czf "$destination/$name.tar.gz" "$name"
-  archives+=("$name.tar.gz")
-  echo "$destination/$name.tar.gz"
-done
-(
-  cd "$destination"
-  shasum -a 256 "${archives[@]}" > checksums.txt
-)
-echo "$destination/checksums.txt"
+mode="${1:-snapshot}"
+export KUBEBAO_VERSION="${2:-0.0.0-dev}"
+export KUBEBAO_NOTARIZE="${KUBEBAO_NOTARIZE:-false}"
+python3 - "$mode" <<'PY'
+import os
+import sys
+sys.path.insert(0, "scripts")
+from release_policy import apple_signing_mode
+signing = apple_signing_mode(os.environ["KUBEBAO_NOTARIZE"])
+if sys.argv[1] == "snapshot" and signing != "none":
+    raise ValueError("Apple signing requires a clean tagged build; use make release-dist.")
+PY
+flags=(release --clean --skip=publish)
+case "$mode" in
+  snapshot)
+    python3 - "$KUBEBAO_VERSION" <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from release_policy import validate_tag
+version = sys.argv[1]
+validate_tag("v" + version)
+if "-" not in version:
+    raise ValueError("Snapshot version requires a prerelease suffix, such as 0.0.0-dev.")
+PY
+    flags+=(--snapshot)
+    ;;
+  release)
+    # GoReleaser requires a clean checkout at a semantic version tag.
+    :
+    ;;
+  *) echo "Usage: scripts/dist.sh [snapshot|release] [snapshot-version]" >&2; exit 1 ;;
+esac
+./scripts/release-tool.sh syft version >/dev/null
+./scripts/release-tool.sh goreleaser "${flags[@]}"
+python3 scripts/prepare_distribution.py dist "$mode"

@@ -1,0 +1,41 @@
+name: Promote packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published immutable stable release (v0.1.0)
+        required: true
+        type: string
+      channel:
+        description: Package repositories to update
+        default: both
+        type: choice
+        options: [both, homebrew, krew]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-package-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: ${{ github.ref == 'refs/heads/main' && vars.CLI_PACKAGES_ENABLED == 'true' && !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    environment: release-packages
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Open Homebrew and Krew update pull requests
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGE_REPOSITORY_TOKEN }}
+          CLI_PACKAGES_ENABLED: ${{ vars.CLI_PACKAGES_ENABLED }}
+          TAG: ${{ inputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          gh auth setup-git
+          python3 scripts/promote_packages.py "$TAG" "$CHANNEL"

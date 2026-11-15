@@ -1,0 +1,44 @@
+{
+  "apiVersion": "openbao.org/v1alpha1",
+  "kind": "OpenBaoCluster",
+  "metadata": {
+    "name": "prod",
+    "namespace": "security",
+    "uid": "fixture-cluster-uid",
+    "resourceVersion": "123",
+    "generation": 7,
+    "annotations": {
+      "openbao.org/restore-hold": "restore-operation-123",
+      "arbitrary.example/credential": "EXCLUDED_FIELD_CANARY"
+    }
+  },
+  "spec": {
+    "version": "2.6.4",
+    "replicas": 3,
+    "readReplicas": {"replicas": 2},
+    "paused": false,
+    "maintenance": {"enabled": true},
+    "selfInit": {"requests": [{"payload": "EXCLUDED_FIELD_CANARY"}]},
+    "environment": [{"value": "EXCLUDED_FIELD_CANARY"}],
+    "args": ["EXCLUDED_FIELD_CANARY"]
+  },
+  "status": {
+    "observedGeneration": 7,
+    "phase": "Upgrading",
+    "currentVersion": "2.6.3",
+    "readyReplicas": 2,
+    "readReplicas": {"readyReplicas": 0},
+    "conditions": [
+      {"type": "OpenBaoSealed", "status": "False", "reason": "Unsealed", "observedGeneration": 7},
+      {"type": "Available", "status": "False", "reason": "InsufficientReadyReplicas", "message": "Two voters are ready", "observedGeneration": 6, "lastTransitionTime": "2026-11-09T10:00:00Z"},
+      {"type": "BackingUp", "status": "False", "reason": "Idle", "observedGeneration": 7}
+    ],
+    "backup": {"lastBackupTime": "2026-11-09T11:00:00Z", "consecutiveFailures": 1, "lastFailureReason": "AuthenticationFailed", "lastFailureMessage": "authentication failed password=FIXTURE_CREDENTIAL", "lastBackupName": "backups/prod.snapshot"},
+    "upgrade": {"fromVersion": "2.6.3", "targetVersion": "2.6.4", "currentPartition": 1, "completedPods": [2], "failure": {"reason": "UpgradeFailed", "message": "token=FIXTURE_CREDENTIAL"}},
+    "blueGreen": {"phase": "Idle", "greenVersion": "2.6.4"},
+    "operationLock": {"operation": "Upgrade", "holder": "fixture-controller", "renewedAt": "2026-11-09T11:10:00Z"},
+    "breakGlass": {"active": false, "nonce": "EXCLUDED_FIELD_CANARY"},
+    "restore": {"name": "legacy-restore", "uid": "fixture-restore-uid", "restartCompletedAt": "2026-11-08T10:00:00Z"},
+    "workload": {"lastError": {"reason": "WorkloadBlocked", "message": "operator reported a blocked workload"}}
+  }
+}

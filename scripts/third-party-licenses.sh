@@ -12,7 +12,7 @@ cat > "$scratch/go.tmpl" <<'EOF'
 EOF
 GOBIN="$scratch" go install github.com/google/go-licenses/v2@v2.0.1
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 "$scratch/go-licenses" report ./cmd/kubebao \
-  --ignore github.com/kubebao/openbao-operator-cli \
+  --ignore github.com/kubebao/openbao-operator-cli/ \
   --template "$scratch/go.tmpl" > "$scratch/go.tsv" 2> "$scratch/go.log" || {
     cat "$scratch/go.log" >&2
     exit 1
@@ -20,6 +20,12 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 "$scratch/go-licenses" report ./cmd/kubeba
 if grep -q $'\tUnknown\t' "$scratch/go.tsv"; then
   echo "go-licenses could not identify a dependency license:" >&2
   cat "$scratch/go.tsv" >&2
+  exit 1
+fi
+# go-licenses matches ignored package prefixes. Keep the module boundary slash:
+# the client dependency starts with the same letters as this module's name.
+if ! awk -F '\t' '$1 == "github.com/kubebao/openbao-operator-client" { found = 1 } END { exit !found }' "$scratch/go.tsv"; then
+  echo "The shared client license is absent from the generated dependency report." >&2
   exit 1
 fi
 LC_ALL=C sort -u "$scratch/go.tsv" > "$scratch/sorted.tsv"
@@ -40,5 +46,9 @@ EOF
     [[ -n "$name" ]] || continue
     printf '\n%s %s\nLicense: %s\n\n' "$name" "$version" "$license"
     cat "$path"
+    if [[ -f "${path%/*}/NOTICE" ]]; then
+      printf '\nUpstream NOTICE\n\n'
+      cat "${path%/*}/NOTICE"
+    fi
   done < "$scratch/sorted.tsv"
 } > "$output"

@@ -4,8 +4,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,36 +18,83 @@ import (
 
 // Execute writes command output and returns a process exit code.
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	command := newCommand(buildinfo.Current())
+	return execute(ctx, os.Args[0], args, stdout, stderr)
+}
+
+func execute(ctx context.Context, executable string, args []string, stdout, stderr io.Writer) int {
+	term := &terminal{environ: os.Environ()}
+	command := newCommand(buildinfo.Current(), term)
+	if filepath.Base(executable) == "kubectl-kubebao" {
+		command.Annotations = map[string]string{cobra.CommandDisplayNameAnnotation: "kubectl kubebao"}
+	}
 	command.SetArgs(args)
 	command.SetOut(stdout)
 	command.SetErr(stderr)
 	if err := command.ExecuteContext(ctx); err != nil {
-		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		term.writeError(stderr, err)
+		var result interface{ ExitCode() int }
+		if errors.As(err, &result) {
+			return result.ExitCode()
+		}
 		return 1
 	}
 	return 0
 }
 
-func newCommand(info buildinfo.Info) *cobra.Command {
+const (
+	groupInspect = "inspect"
+	groupControl = "control"
+)
+
+func newCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "kubebao",
-		Short: "Companion CLI for the OpenBao Operator",
-		Long: "kubebao is a companion CLI for the OpenBao Operator.\n\n" +
-			"This development scaffold provides help and build information.\n" +
-			"Cluster diagnostics, support bundles, and operator controls are planned.",
+		Short: "Inspect and operate OpenBao clusters managed by the OpenBao Operator",
+		Long: "kubebao inspects and operates OpenBao clusters managed by the OpenBao Operator.\n\n" +
+			"It reads what the operator reports through the Kubernetes API, diagnoses common problems,\n" +
+			"packages evidence for support, and submits guarded pause, maintenance, and restart requests.\n" +
+			"It never reads Secrets or contacts OpenBao directly.",
+		Example: "  kubebao list -A\n" +
+			"  kubebao status prod -n security\n" +
+			"  kubebao doctor prod -n security\n" +
+			"  kubebao maintenance enable prod -n security --wait",
 		Version:       info.String(),
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		CompletionOptions: cobra.CompletionOptions{
-			DisableDefaultCmd: true,
-		},
 		RunE: func(command *cobra.Command, _ []string) error {
 			return command.Help()
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
+	// Subcommands use -v for --verbose, so --version has no shorthand.
+	root.Flags().Bool("version", false, "Print the kubebao version")
+	root.SetFlagErrorFunc(func(command *cobra.Command, err error) error {
+		if command == command.Root() && strings.Contains(err.Error(), "'v' in -v") {
+			return fmt.Errorf("%w; use --version for the version, or -v after a command for verbose output", err)
+		}
+		return err
+	})
+	term.addFlags(root)
+	root.AddGroup(
+		&cobra.Group{ID: groupInspect, Title: "Inspect and diagnose:"},
+		&cobra.Group{ID: groupControl, Title: "Control a cluster:"},
+	)
+	inspect := []*cobra.Command{
+		newListCommand(info, term), newStatusCommand(info, term), newDoctorCommand(info, term), newBundleCommand(info, term),
+	}
+	control := []*cobra.Command{
+		newPauseCommand(info, term, true), newPauseCommand(info, term, false), newMaintenanceCommand(info, term),
+		newRestartCommand(info, term),
+	}
+	for _, command := range inspect {
+		command.GroupID = groupInspect
+	}
+	for _, command := range control {
+		command.GroupID = groupControl
+	}
+	root.AddCommand(inspect...)
+	root.AddCommand(control...)
 	root.AddCommand(newVersionCommand(info))
 	return root
 }
@@ -74,5 +125,6 @@ func newVersionCommand(info buildinfo.Info) *cobra.Command {
 		},
 	}
 	command.Flags().StringVarP(&output, "output", "o", output, "Output format: text or json")
+	completeOutput(command)
 	return command
 }
