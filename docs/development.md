@@ -108,7 +108,9 @@ dependency notice verification, and four-platform archive builds and verificatio
 workflow artifacts. It also scans reachable Git history for secrets and validates workflow definitions. Ordinary checks
 never publish.
 
-The manual Release workflow defaults to an unsigned rehearsal. Public publication requires a separate repository gate,
+The **Distribution rehearsal** workflow tests unsigned snapshot archives on all four native platforms without enabling
+publication. It runs for packaging changes and supports manual runs. The tagged **Release** workflow remains disabled;
+its default manual operation is also an unsigned rehearsal. Public publication requires a separate repository gate,
 immutable releases, and a protected environment. Apple signing is a separate opt-in. Its runtime matrix executes the
 same archived binaries and rebuilds the source on all four platforms; macOS jobs also exercise the formula.
 Package promotion has a separate gate and opens PRs without merging them. See [release procedures](releases.md).
