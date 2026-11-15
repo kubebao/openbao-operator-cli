@@ -21,6 +21,9 @@ Commits, such as `feat(status): report observed generation`. Use a conventional 
 Run `make secret-scan` to scan reachable Git history with pinned Gitleaks. The scan redacts detected values.
 Run `make check-workflows` after changing GitHub Actions.
 
+CI uploads and downloads the distribution archives, compares their contents, and verifies the downloaded payload.
+This exercises the release workflow's artifact download action without publishing a release.
+
 Dependabot groups patch and minor CI action updates separately from actions used only by the release workflow.
 Release action updates need a non-publishing release rehearsal before merging. Major action updates have separate PRs.
 
