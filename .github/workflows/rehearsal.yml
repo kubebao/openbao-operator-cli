@@ -1,0 +1,85 @@
+name: Distribution rehearsal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/rehearsal.yml
+      - .goreleaser.yaml
+      - packaging/**
+      - scripts/dist.sh
+      - scripts/prepare_distribution.py
+      - scripts/stage_release.py
+      - scripts/verify_dist.py
+      - scripts/verify_homebrew.py
+      - scripts/verify_homebrew.rb
+      - scripts/release-tool.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REHEARSAL_VERSION: 0.0.0-rehearsal.${{ github.sha }}
+  KUBEBAO_NOTARIZE: "false"
+
+jobs:
+  archives:
+    name: Build rehearsal payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build and stage without publishing
+        run: |
+          make release-check dist DIST_VERSION="$REHEARSAL_VERSION"
+          python3 scripts/stage_release.py dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-rehearsal
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 7
+
+  native:
+    name: Native distribution (${{ matrix.runner }})
+    needs: archives
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli-rehearsal
+          path: payload
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify source identity
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          metadata = json.loads(Path("payload/release-info.json").read_text())
+          if metadata["commit"] != os.environ["GITHUB_SHA"] or metadata["version"] != os.environ["REHEARSAL_VERSION"]:
+              raise SystemExit("Payload does not match the triggering source.")
+          PY
+      - name: Verify native executable, Krew, and source build
+        run: python3 scripts/verify_dist.py payload --smoke --krew --source-build --expect-kind snapshot --expect-signing none
+      - name: Verify source Homebrew formula
+        if: runner.os == 'macOS'
+        run: make verify-homebrew DIST_DIR=payload

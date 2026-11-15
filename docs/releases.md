@@ -1,6 +1,6 @@
 # Release procedures
 
-No release is published; build from source. CI validates the repository without publishing artifacts. The
+No release is published; build from source. CI validates the repository without publishing releases or packages. The
 `CLI_RELEASES_ENABLED` and `CLI_PACKAGES_ENABLED` repository variables gate publication and package promotion. Both are
 `false`, and changing repository visibility does not change them.
 
@@ -43,6 +43,19 @@ hashes together after checking its upstream release. These tools are not linked 
 
 ## Versioning and qualification
 
+### Unsigned distribution rehearsal
+
+The **Distribution rehearsal** workflow builds one checksummed snapshot payload and tests it natively on Linux and
+macOS, on amd64 and arm64. It verifies the source identity, archive contents, SPDX SBOMs, executable startup, Krew
+installation from the local archive, and a rebuild from the source archive. On macOS, it also builds and tests the
+generated Homebrew formula in a temporary prefix.
+
+The workflow runs when packaging files change and supports manual runs on a selected branch. It does not create tags,
+publish releases, push packages, request Apple signing, or use the protected release environment. Keep publication
+variables false and publication workflows disabled while using it.
+
+### Release qualification
+
 Use independent semantic version tags such as `v0.1.0` and `v0.1.0-rc.1`. Build metadata and numeric prerelease
 identifiers with leading zeros are rejected. Prereleases never update default package channels or the latest stable
 release pointer. Stable direct downloads remain available for version-pinned automation.
@@ -59,10 +72,10 @@ support-bundle compatibility changes in the release notes.
 
 Perform these steps only after public release is authorized:
 
-1. Approve the repository's public visibility and enable GitHub Actions. The workflows cannot change visibility.
+1. Verify public repository visibility, enabled CI and security workflows, and successful checks on the selected source.
 2. Enable immutable releases in GitHub repository settings. Publication checks the setting and fails if it cannot read it.
 3. Configure a protected `release` environment with required reviewers, no self-review, and deployment restricted to
-   `main`. Use a `release-rehearsal` environment without signing secrets for private rehearsals.
+   `main`. The tagged Release workflow uses `release-rehearsal` without signing secrets for unsigned rehearsals.
 4. Allow the pinned workflow actions under the repository's Actions policy. Keep publication restricted to trusted
    maintainers. Apple secrets are required only when Apple signing is selected.
 5. Draft handwritten release notes in chat for review. After approval, commit them as `docs/releases/<tag>.md`, for

@@ -8,12 +8,13 @@ generation from omission.
 
 ## Shared client
 
-The CLI pins `github.com/kubebao/openbao-operator-client` in `go.mod`. The pinned client release defines the typed
+The CLI pins the public client candidate `v0.2.1-0.20261114115514-8981014162d0`, commit
+`8981014162d00a902584dff0e5a2b9d5fd519e5d`, in `go.mod`. The pinned client defines the typed
 evidence model, API projections, guarded control plans, and diagnostic semantics. Evidence and diagnostic policies have
 no separate schema or rule-set versions. The CLI keeps command JSON at `schemaVersion: "v1"` through presentation
 mappings. Support bundles use one format marker.
 
-Release builds use the published client with `GOWORK=off` and no local replacement. The client's
+Release builds use that exact dependency with `GOWORK=off` and no local replacement. The client's
 [compatibility document](https://github.com/kubebao/openbao-operator-client/blob/8981014162d00a902584dff0e5a2b9d5fd519e5d/docs/compatibility.md)
 describes its adapter sources and validation levels.
 
@@ -24,6 +25,17 @@ group that serves `OpenBaoCluster`. `--api-group` reads only the selected group.
 pinned. Migration annotations do not establish identity across groups.
 
 ## Validation levels
+
+### Distribution
+
+The **Distribution rehearsal** workflow exercises Linux and macOS archives natively on amd64 and arm64. It verifies
+the source commit, checksums, four binary SBOMs, Krew installation from the local archive, and a source rebuild. The
+generated Homebrew formula is built and tested on macOS in a temporary prefix. This does not qualify Homebrew bottles,
+Linux Homebrew installation, Apple signing, notarization, or managed-device download policies.
+
+Packaging checks do not connect to an operator or extend the runtime baselines below.
+
+### Operator capabilities
 
 | Level | Coverage | Limits |
 | --- | --- | --- |
