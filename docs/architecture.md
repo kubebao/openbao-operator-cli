@@ -14,6 +14,23 @@ annotation and legacy cluster restore fields, with their limits identified. Main
 `doctor` adds bounded collection of associated StatefulSets, Pods, and restore requests. Pure rules explain readiness and
 recovery restrictions from that captured evidence. It does not change cluster state or collect logs. See [diagnosis](doctor.md).
 
+## Safety model
+
+- **Read-only by default.** `list`, `status`, `doctor`, and `support-bundle` only read. They never pause a cluster or
+  enable maintenance to collect evidence.
+- **Reported, not probed.** Values come from the operator's status and from Kubernetes resources. `kubebao` does not
+  probe OpenBao, so a report describes what the operator observed, not live serving health.
+- **Unknown stays unknown.** Evidence that could not be read, or that the operator does not report, is shown as unknown.
+  It never counts as healthy.
+- **Ownership by UID.** Related StatefulSets, Pods, and restores are matched through owner references and UIDs, never
+  by name or label alone.
+- **Guarded controls.** Each control changes one field and is bound to the cluster's UID, resource version, and
+  generation, so it fails if the cluster changed since it was read. A request with an unknown outcome is never retried.
+  API acceptance and operator observation are reported separately; `--wait` waits for the operator.
+- **Independent controls.** Pause and maintenance are separate. Maintenance never resumes a paused cluster.
+- **Approved fields only.** Secrets, logs, provider messages, credentials, and arbitrary annotations are not collected.
+  Review resource names in a support bundle before you share it.
+
 ## Scope
 
 `kubebao` connects to Kubernetes through the caller's kubeconfig. It requires neither the console nor a backend service.
@@ -80,11 +97,4 @@ contract. See [compatibility](compatibility.md) for validated versions and limit
 
 ## Command results
 
-Help and version use `0` for completion and `1` for invalid input or execution failure. Status also uses `3` when collection
-is incomplete. Doctor uses:
-
-- `2`: diagnosis finds an issue at or above the selected failure threshold.
-- `3`: collection or verification is incomplete, including an unresolved outcome after submission.
-
-Incomplete diagnosis takes precedence in the exit code while preserving confirmed findings in output. Status does not
-fail only because the cluster is unhealthy. A complete bundle can contain serious findings and still return success.
+Command wrappers own output formats, failure thresholds, and exit codes. See [output and exit codes](output.md).

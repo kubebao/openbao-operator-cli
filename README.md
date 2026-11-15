@@ -5,14 +5,10 @@
   <img src="docs/images/kubebao-logo.webp" alt="KubeBao" width="160">
 </picture>
 
-# kubebao
+# OpenBao Operator CLI
 
 **A command-line tool to inspect, diagnose, and control clusters managed by the
 [OpenBao Operator](https://github.com/kubebao/openbao-operator).**
-
-[![Check](https://github.com/kubebao/openbao-operator-cli/actions/workflows/check.yml/badge.svg)](https://github.com/kubebao/openbao-operator-cli/actions/workflows/check.yml)
-[![CodeQL](https://github.com/kubebao/openbao-operator-cli/actions/workflows/codeql.yml/badge.svg)](https://github.com/kubebao/openbao-operator-cli/actions/workflows/codeql.yml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 [Quick start](#quick-start) • [Install](docs/installation.md) • [Documentation](#documentation) • [Contributing](CONTRIBUTING.md)
 
@@ -47,13 +43,14 @@ Resources
       ╰── Pod prod-2  Running · ready
 ```
 
-`kubebao` shows what the OpenBao Operator reports about your OpenBao clusters, diagnoses common problems, packages
+The OpenBao Operator CLI, `kubebao`, shows what the OpenBao Operator reports about your OpenBao clusters, diagnoses common problems, packages
 evidence for support, and submits guarded pause, maintenance, and restart requests.
 
 It works through your kubeconfig and the Kubernetes API. It never reads Secrets, never contacts OpenBao directly, and
-changes a cluster only when you run a control command. The operator owns reconciliation and lifecycle safety.
+changes a cluster only when you run a control command. The operator owns reconciliation and lifecycle safety. See the
+[safety model](docs/architecture.md#safety-model).
 
-`kubebao` is maintained by [KubeBao](https://kubebao.org), an independent open-source project. It is not an official
+OpenBao Operator CLI is maintained by [KubeBao](https://kubebao.org), an independent open-source project. It is not an official
 OpenBao project.
 
 ## Features
@@ -66,7 +63,8 @@ OpenBao project.
   review before you share it.
 - **Guarded controls.** `pause`, `resume`, `maintenance`, and `restart` each change one field, fail if the cluster
   changed since it was read, and can wait until the operator acts.
-- **Built for scripts.** Every reporting command has versioned JSON output and documented exit codes.
+- **Built for scripts.** Every reporting command has versioned JSON output and
+  [documented exit codes](docs/output.md).
 
 `kubebao` does not run backups, upgrades, restores, scaling, or installation, and it does not repair clusters
 automatically. Use `bao` for OpenBao administration. Validated operator versions and their limits are in
@@ -111,7 +109,7 @@ The [installation guide](docs/installation.md) covers every channel, checksum ve
 | --- | --- |
 | OpenBao Operator | Clusters managed by the [OpenBao Operator](https://github.com/kubebao/openbao-operator) |
 | Kubernetes | 1.34 or later |
-| Access | A kubeconfig with the [permissions](#permissions) for the commands you run |
+| Access | A kubeconfig with the [permissions](docs/installation.md#permissions) for the commands you run |
 | Build | Go 1.27.4 or later, Make, and Bash |
 
 ## Commands
@@ -130,56 +128,6 @@ The [installation guide](docs/installation.md) covers every channel, checksum ve
 
 Run `kubebao COMMAND --help` for flags and examples.
 
-## Safety model
-
-- **Read-only by default.** `list`, `status`, `doctor`, and `support-bundle` only read. They never pause a cluster or
-  enable maintenance to collect evidence.
-- **Reported, not probed.** Values come from the operator's status and from Kubernetes resources. `kubebao` does not
-  probe OpenBao, so a report describes what the operator observed, not live serving health.
-- **Unknown stays unknown.** Evidence that could not be read, or that the operator does not report, is shown as unknown.
-  It never counts as healthy.
-- **Ownership by UID.** Related StatefulSets, Pods, and restores are matched through owner references and UIDs, never
-  by name or label alone.
-- **Guarded controls.** Each control changes one field and is bound to the cluster's UID, resource version, and
-  generation, so it fails if the cluster changed since it was read. A request with an unknown outcome is never retried.
-  API acceptance and operator observation are reported separately; `--wait` waits for the operator.
-- **Independent controls.** Pause and maintenance are separate. Maintenance never resumes a paused cluster.
-- **Approved fields only.** Secrets, logs, provider messages, credentials, and arbitrary annotations are not collected.
-  Review resource names in a support bundle before you share it.
-
-## Output and scripting
-
-Every reporting command supports `--output text` (the default) and `--output json`. JSON is the stable, versioned
-interface for scripts. Text output is for people and can change between releases.
-
-Text output uses colour and symbols on a terminal: `✓` good, `!` warning, `✗` failure, `?` unknown, `•` note. Select
-`--color auto`, `always`, or `never`; `auto` honours `NO_COLOR`. Pipes, files, and JSON never receive escape sequences.
-Results go to standard output and errors to standard error.
-
-| Exit code | Meaning |
-| --- | --- |
-| `0` | The command completed. A status report can still describe an unhealthy cluster. |
-| `1` | Invalid input, configuration error, missing cluster, ambiguous API group, or a rejected control. |
-| `2` | `doctor` found a finding at or above `--fail-on` (default `warning`). |
-| `3` | Evidence is incomplete, the cluster changed during the command, or a control outcome is unknown or not yet observed. |
-
-`--version` has no short form: `-v` means `--verbose` on `status` and `doctor`.
-
-## Permissions
-
-`kubebao` uses your own Kubernetes credentials. It needs only these permissions in the selected namespace, plus access
-to API discovery for `kubebao.org` or `openbao.org`:
-
-| Command | Permissions |
-| --- | --- |
-| `status` | `get` on `openbaoclusters` |
-| `list` | `list` on `openbaoclusters`; cluster-wide with `-A` |
-| `doctor`, `support-bundle` | `get` on `openbaoclusters`; `list` on `statefulsets`, `pods`, and `openbaorestores` |
-| `pause`, `resume`, `maintenance`, `restart` | `get` and `patch` on `openbaoclusters`; with `--wait`, maintenance and restart also `list` `statefulsets` and `pods` |
-
-No command needs Secret access, Pod logs, `exec`, or port forwarding. If both `kubebao.org` and `openbao.org` serve
-`OpenBaoCluster`, choose one with `--api-group`.
-
 ## Documentation
 
 **Get started:** [install](docs/installation.md) · [observe a cluster](docs/status.md) ·
@@ -187,8 +135,8 @@ No command needs Secret access, Pod logs, `exec`, or port forwarding. If both `k
 
 **Operate:** [collect a support bundle](docs/support-bundles.md) · [pause, maintenance, and restart](docs/controls.md)
 
-**Reference:** [architecture and scope](docs/architecture.md) · [compatibility](docs/compatibility.md) ·
-[development](docs/development.md) · [releases](docs/releases.md)
+**Reference:** [output and exit codes](docs/output.md) · [architecture and safety model](docs/architecture.md) ·
+[compatibility](docs/compatibility.md) · [development](docs/development.md) · [releases](docs/releases.md)
 
 ## Contributing
 

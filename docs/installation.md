@@ -139,6 +139,21 @@ For the kubectl plugin, kubectl 1.26 and newer completes plugin arguments throug
 
 - For a direct download, install `kubectl_complete-kubebao` in the same `PATH` directory as `kubectl-kubebao`.
 
+## Permissions
+
+`kubebao` uses your own Kubernetes credentials. It needs only these permissions in the selected namespace, plus access
+to API discovery for `kubebao.org` or `openbao.org`:
+
+| Command | Permissions |
+| --- | --- |
+| `status` | `get` on `openbaoclusters` |
+| `list` | `list` on `openbaoclusters`; cluster-wide with `-A` |
+| `doctor`, `support-bundle` | `get` on `openbaoclusters`; `list` on `statefulsets`, `pods`, and `openbaorestores` |
+| `pause`, `resume`, `maintenance`, `restart` | `get` and `patch` on `openbaoclusters`; with `--wait`, maintenance and restart also `list` `statefulsets` and `pods` |
+
+No command needs Secret access, Pod logs, `exec`, or port forwarding. If both `kubebao.org` and `openbao.org` serve
+`OpenBaoCluster`, choose one with `--api-group`. Help, version, and offline bundle diagnosis need no cluster access.
+
 ## Verify an installation
 
 Run `kubebao version --output json`, or `kubectl kubebao version --output json` for Krew. The result contains the CLI
