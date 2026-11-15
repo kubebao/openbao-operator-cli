@@ -19,8 +19,7 @@ Commits, such as `feat(status): report observed generation`. Use a conventional 
 [Developer Certificate of Origin](https://developercertificate.org/).
 
 Run `make secret-scan` to scan reachable Git history with pinned Gitleaks. The scan redacts detected values.
-Run `make check-workflows` after changing GitHub Actions. The [source publication procedure](docs/source-publication.md)
-describes the controls applied when the repository becomes public.
+Run `make check-workflows` after changing GitHub Actions.
 
 Keep changes focused. Explain the resulting behavior, material compatibility or security implications, and the checks
 you ran. Follow the boundaries in [AGENTS.md](AGENTS.md) and the [architecture](docs/architecture.md).

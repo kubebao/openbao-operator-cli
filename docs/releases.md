@@ -1,8 +1,8 @@
 # Release procedures
 
-The source-first opening provides source builds. No release is published. CI can validate the private repository
-without publishing artifacts. Publication and package-promotion gates remain false; making the source public does not
-open either gate. See [source publication](source-publication.md).
+No release is published; build from source. CI validates the repository without publishing artifacts. The
+`CLI_RELEASES_ENABLED` and `CLI_PACKAGES_ENABLED` repository variables gate publication and package promotion. Both are
+`false`, and changing repository visibility does not change them.
 
 ## Artifacts
 
@@ -48,7 +48,7 @@ identifiers with leading zeros are rejected. Prereleases never update default pa
 release pointer. Stable direct downloads remain available for version-pinned automation.
 
 Before a release, record its CLI commit, shared-client version, operator versions and image/CRD identities, Kubernetes
-versions, and exercised capabilities. Use [existing qualification evidence](client-migration.md) as the starting point.
+versions, and exercised capabilities. Start from the validation levels in [compatibility](compatibility.md).
 The release workflow checks executable startup, help, version output, and process results on all four native platforms.
 It also rebuilds the source archive on those platforms and exercises the source formula on macOS with a temporary prefix.
 The formula check does not install Homebrew's build dependencies or qualify bottles.

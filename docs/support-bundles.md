@@ -116,5 +116,5 @@ interrupted collection, file publication, output failures, and hostile inputs. T
 versions, resource types, lifecycle actions, or nonempty restore correlation against a live operator.
 
 The [read-only restore runtime test](doctor.md#read-only-restore-qualification) checks a caller-provisioned nonempty
-restore and its bundle replay. See the [operator boundary](client-migration.md#nonempty-restore-observation-boundary)
+restore and its bundle replay. See [restore observation](compatibility.md#restore-observation)
 for the qualified baselines and limits.

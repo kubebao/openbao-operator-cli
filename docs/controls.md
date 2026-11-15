@@ -110,4 +110,4 @@ unambiguous result. Maintenance and restart waits also need namespace `list` on 
 only the named cluster read. No Secret, Pod log or exec, OpenBao, or cloud API access is added.
 
 The shared client owns public projections, guarded submission, and pure assessments. The CLI owns credentials, API
-selection, polling, output, and exit codes. See [client integration](client-migration.md) for qualification boundaries.
+selection, polling, output, and exit codes. See [compatibility](compatibility.md) for validated versions and limits.

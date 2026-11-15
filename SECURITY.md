@@ -1,6 +1,6 @@
 # Security
 
-This project is in initial development. It has no released or qualified operator compatibility range.
+No release is published. See [compatibility](docs/compatibility.md) for validated operator versions and their limits.
 
 Report suspected vulnerabilities privately to a repository maintainer. Use GitHub private vulnerability reporting when
 the repository offers that option at <https://github.com/kubebao/openbao-operator-cli/security/advisories/new>.
@@ -38,4 +38,4 @@ submits controls. See [architecture](docs/architecture.md) and [controls](docs/c
 
 CI runs Go security linting, race tests, `govulncheck`, dependency-notice checks, workflow validation, and a redacted
 Git-history secret scan. CodeQL and dependency review run when the repository is public; a private-repository skip is
-not a passed scan. See [development](docs/development.md) and [source publication](docs/source-publication.md).
+not a passed scan. See [development](docs/development.md).

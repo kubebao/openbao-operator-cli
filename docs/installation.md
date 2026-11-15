@@ -145,6 +145,6 @@ Run `kubebao version --output json`, or `kubectl kubebao version --output json` 
 version, source commit, Go version, operating system, and architecture. Use one installation method for each executable
 on `PATH` so upgrades select the intended version.
 
-Windows packages, OS package repositories, container images, and self-update commands are outside the initial
-distribution scope. See [operator qualification](client-migration.md#operator-qualification-boundary) for the current
-capability limits; installing a binary does not extend that qualification.
+Windows packages, OS package repositories, container images, and self-update commands are outside the distribution
+scope. See [compatibility](compatibility.md) for validated versions and limits. Installing a binary does not extend
+that validation.

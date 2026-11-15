@@ -1,13 +1,13 @@
 # Architecture and scope
 
-## Current implementation
+## Overview
 
 The Go executable provides cluster status, workload and recovery diagnosis, support bundles, offline diagnosis,
 guarded controls, local archive packaging, and development checks. Status reads one named `OpenBaoCluster` through the
 caller's kubeconfig and projects public v1alpha1 fields into a typed observation. Separate API adapters support `kubebao.org` and
 `openbao.org`, unambiguous API discovery, explicit selection, and UID-pinned polling.
 
-The first status implementation does not collect related workloads or restore requests. It reports the restore-hold
+`status` does not collect related workloads or restore requests. It reports the restore-hold
 annotation and legacy cluster restore fields, with their limits identified. Maintenance annotation propagation and current
 `OpenBaoRestore` progress remain uncollected by status. See [status](status.md).
 
@@ -53,8 +53,7 @@ heartbeats.
 
 Use approved field projections before writing evidence to temporary storage or output. Exclude Secrets, raw ConfigMap
 contents, literal environment values, container arguments, arbitrary annotations, and self-init payloads by default.
-Optional logs require time, byte, and duration limits. Record omissions, truncation, and redactions without promising
-complete removal of sensitive information.
+Bundles do not collect logs.
 
 Live and offline diagnosis consume the same normalized observations. The pinned client release defines the typed model
 and rules. Bundles record the CLI build, policy thresholds, and analysis reference time under one format marker.
@@ -77,7 +76,7 @@ concurrency. Report API acceptance, configuration presence, and operator or work
 bounded timeouts. A timeout after submission does not prove that the change failed and does not trigger rollback.
 
 Compatibility is declared per operator release and capability. API discovery alone does not establish a qualified
-contract. See [shared client integration](client-migration.md) for recorded qualification boundaries.
+contract. See [compatibility](compatibility.md) for validated versions and limits.
 
 ## Command results
 

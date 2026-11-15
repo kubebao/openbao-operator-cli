@@ -1,6 +1,7 @@
 # Engineering rules
 
-Write clear technical English for developers and operators. Use short, direct sentences and exact API terminology.
+Write clear technical English for developers and operators. Follow the Google developer documentation style guide and
+the detailed rules in [.agents/rules/documentation.md](.agents/rules/documentation.md).
 
 ## Boundaries
 
@@ -18,7 +19,8 @@ Write clear technical English for developers and operators. Use short, direct se
   acceptance, configuration presence, and operator or workload verification.
 - Pause and maintenance are independent. Never resume reconciliation implicitly to propagate a maintenance change.
 - Treat support archives as untrusted input. Bound reads and reject unsafe paths and unsupported formats.
-- Mark planned features as planned. Do not present scaffold or fixture checks as operator integration qualification.
+- Document implemented behavior only. Track planned work in issues. Do not present scaffold or fixture checks as operator
+  integration qualification.
 
 ## Code
 
@@ -38,4 +40,5 @@ Write clear technical English for developers and operators. Use short, direct se
 - Use scoped Conventional Commits. When a branch is requested, use a conventional name such as `feat/cluster-status`.
 - Sign off commits under the Developer Certificate of Origin.
 - Preserve other repositories and existing local environments. Use isolated clusters for integration tests.
-- Update documentation when command behavior or support boundaries change.
+- Update documentation in the same change as command behavior or support boundaries. Record validation levels in
+  `docs/compatibility.md`. Do not add plans, audits, or status records to `docs/`.

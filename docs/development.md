@@ -106,13 +106,12 @@ The Check workflow supports manual runs, pull requests, pushes to `main`, and me
 vulnerability analysis,
 dependency notice verification, and four-platform archive builds and verification. Generated artifacts are retained as
 workflow artifacts. It also scans reachable Git history for secrets and validates workflow definitions. Ordinary checks
-never publish. See [source publication](source-publication.md) for the separate visibility and publication controls.
+never publish.
 
 The manual Release workflow defaults to an unsigned rehearsal. Public publication requires a separate repository gate,
 immutable releases, and a protected environment. Apple signing is a separate opt-in. Its runtime matrix executes the
 same archived binaries and rebuilds the source on all four platforms; macOS jobs also exercise the formula.
-Package promotion has a separate gate and opens PRs without merging them. These workflows do
-not run while Actions remains disabled. See [release procedures](releases.md).
+Package promotion has a separate gate and opens PRs without merging them. See [release procedures](releases.md).
 
 Actions are pinned to commit SHAs. Dependabot proposes weekly Go and GitHub Actions updates.
 
@@ -125,20 +124,13 @@ enable the applicable GitHub Code Security features and then set these repositor
 Until enabled, those jobs are skipped. A skipped job is not a successful security analysis. Go security linting and
 `make vulncheck` remain part of the Check workflow. See [GitHub security feature availability](https://docs.github.com/en/code-security/getting-started/github-security-features).
 
-## Scaffold reference
-
-The tooling and engineering conventions were adapted from `kubebao/openbao-operator-console` at commit
-`529bf8ef70099aedd8c7fef3a5c6df943e7f00a4`. The scaffold excludes the console's uncommitted edge-publication work, frontend,
-database, authentication, container, and Helm deployment tooling.
-
-
 ## Shared client development
 
 Use Go 1.27.4 and the client version pinned in `go.mod`. Coordinated development can use an untracked `go.work` file.
 Final qualification uses `GOWORK=off` and no local replacement. The public client dependency requires no private-module
 credentials. Regenerate notices with `make licenses` after a dependency change.
 
-Run `make check`, `make vulncheck`, `make check-licenses`, and `make dist` for the migration. Verify archive checksums and
+Run `make check`, `make vulncheck`, `make check-licenses`, and `make dist` after a client update. Verify archive checksums and
 contents. Synthetic command tests cover discovery/named-read boundaries, doctor selectors and limits, UID/generation
 verification, interruption, timeout, redirects, output failure, process codes, and sensitive-data exclusion. Pure mapping
 tests replay serialized normalized evidence with the same policy and reference time. Operator qualification must record
