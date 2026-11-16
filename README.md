@@ -81,6 +81,9 @@ make build
 ./bin/kubebao version
 ```
 
+With Nix and flakes enabled, build from the same checkout with `nix build .#kubebao`, or run
+`nix run .#kubebao -- version`. See [Nix installation](docs/nix.md) for pinned inputs and package checks.
+
 `kubebao` uses standard kubeconfig loading. Select a file with `--kubeconfig`, a context with `--context`, and a
 namespace with `-n`. Replace `prod` and `security` with your cluster name and namespace.
 

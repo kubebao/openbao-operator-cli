@@ -1,5 +1,8 @@
 # Installation
 
+For a Nix source build with pinned dependencies, see [Install with Nix](nix.md). The flake supports Linux on amd64 and
+arm64, and macOS on arm64. It includes the kubectl plugin and shell completion.
+
 The CLI is unreleased. GitHub downloads, the Homebrew tap, and the Krew index entry are not published yet. Build from
 source until a release is available. The package commands below describe installation after publication.
 
