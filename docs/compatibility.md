@@ -78,6 +78,14 @@ zero-replica read pool. For each fixture, the test runs a server dry-run without
 restart, waits for marker, revision, and readiness convergence, and checks that every original UID-confirmed Pod was
 replaced. To repeat the check, see the [runtime test procedure](development.md#rolling-restart-runtime-qualification).
 
+### Nix source packaging
+
+The Nix workflow evaluates and builds the source flake natively on Linux/amd64, Linux/arm64, and macOS/arm64. It runs Go
+tests and verifies source identity, CLI startup, the kubectl plugin entry point, plugin completion, and installed shell
+completion. The lockfile, compiler source checksum, and Go vendor hash pin the build inputs. This does not extend
+operator, Apple signing, or production qualification. Intel macOS is outside the current nixpkgs platform set; use the
+archive or Homebrew installation path there.
+
 ## Unsupported
 
 The validation above does not cover:
