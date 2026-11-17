@@ -13,7 +13,13 @@ import (
 
 func TestConditionFindingsAreTitledByConditionWithATargetedCommand(t *testing.T) {
 	t.Parallel()
-	target := evidence.Target{Context: "demo", Namespace: "team-a", Name: "bao", UID: "uid-1"}
+	target := evidence.Target{
+		Selection: &evidence.Selection{Context: "demo", KubeconfigFiles: []string{"/config"}},
+		Context:   "demo",
+		Namespace: "team-a",
+		Name:      "bao",
+		UID:       "uid-1",
+	}
 	ref := evidence.Reference{APIVersion: "kubebao.org/v1alpha1", Kind: "OpenBaoCluster", Namespace: "team-a", Name: "bao", UID: "uid-1"}
 	generation, condition := ref, ref
 	generation.Field, condition.Field = "metadata.generation", "status.conditions[type=TLSReady]"
@@ -43,7 +49,8 @@ func TestConditionFindingsAreTitledByConditionWithATargetedCommand(t *testing.T)
 		"! WARNING  Operator conditions: TLSReady  KBAO-CONDITION-001",
 		"• INFO  Operator conditions: EtcdEncryptionWarning",
 		"→ Show the condition with the operator's message:",
-		`kubectl --context demo -n team-a get openbaoclusters.kubebao.org bao -o jsonpath='{.status.conditions[?(@.type=="TLSReady")]}'`,
+		`kubectl -n team-a get openbaoclusters.kubebao.org bao -o ` + `'jsonpath={.status.conditions[?(@.type=="TLSReady")]}'` +
+			` --context demo --kubeconfig /config`,
 		"encrypts Secrets at rest",
 	} {
 		if !strings.Contains(text, want) {

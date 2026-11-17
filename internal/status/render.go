@@ -64,7 +64,9 @@ func writeUnavailable(b *strings.Builder, report evidence.Snapshot, options Text
 		b.WriteString("  Field: " + options.ValidationPath + "\n")
 	}
 	if report.ResultCode == "not_found" {
-		b.WriteString(render.NextCommand("Check the namespace and context, or list clusters:", "kubectl get openbaoclusters -A", "  "))
+		b.WriteString(
+			render.NextCommand("Check the namespace and context, or list clusters:", render.ClusterCommand(report.Target, "list"), "  "),
+		)
 	}
 }
 

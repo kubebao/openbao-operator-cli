@@ -22,13 +22,21 @@ type Snapshot struct {
 }
 
 type Target struct {
-	Context           string `json:"context"`
-	KubernetesCluster string `json:"kubernetesCluster"`
-	Namespace         string `json:"namespace"`
-	Name              string `json:"name"`
-	APIGroup          string `json:"apiGroup,omitempty"`
-	APIVersion        string `json:"apiVersion,omitempty"`
-	UID               string `json:"uid,omitempty"`
+	// Selection retains exact local connection arguments for copyable commands.
+	// Captures and JSON never carry local kubeconfig paths or executable arguments.
+	Selection         *Selection `json:"-"`
+	Context           string     `json:"context"`
+	KubernetesCluster string     `json:"kubernetesCluster"`
+	Namespace         string     `json:"namespace"`
+	Name              string     `json:"name"`
+	APIGroup          string     `json:"apiGroup,omitempty"`
+	APIVersion        string     `json:"apiVersion,omitempty"`
+	UID               string     `json:"uid,omitempty"`
+}
+
+type Selection struct {
+	KubeconfigFiles []string
+	Context         string
 }
 
 type Step struct {

@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -77,7 +78,7 @@ func newControlCommand(
 			if output != "text" && output != "json" {
 				return fmt.Errorf("unsupported output format %q: use text or json", output)
 			}
-			if err := validateWait(options); err != nil {
+			if err := validateControlOptions(command, &options); err != nil {
 				return err
 			}
 			access.Name, options.RequestTimeout = args[0], access.RequestTimeout
@@ -112,11 +113,38 @@ func newControlCommand(
 func addControlFlags(command *cobra.Command, options *control.Options, output *string) {
 	flags := command.Flags()
 	flags.StringVarP(output, "output", "o", *output, "Output format: text or json")
+	flags.StringVar(
+		&options.RequestFile,
+		"request-file",
+		"",
+		"Save the original request before submission for later read-only observation; never overwrite",
+	)
 	flags.BoolVar(&options.DryRun, "dry-run", false, "Validate through API server dry-run without persisting the change")
 	flags.BoolVar(&options.Wait, "wait", false, "Wait until later evidence shows the operator applied the change")
 	flags.DurationVar(&options.WaitTimeout, "wait-timeout", options.WaitTimeout, "Maximum time to wait after submission")
 	flags.DurationVar(&options.PollInterval, "poll-interval", options.PollInterval, "Delay between checks while waiting; minimum 100ms")
 	completeOutput(command)
+}
+
+func validateControlOptions(command *cobra.Command, options *control.Options) error {
+	if command.Flags().Changed("request-file") && options.RequestFile == "" {
+		return errors.New("--request-file requires a nonempty path")
+	}
+	if err := validateWait(*options); err != nil {
+		return err
+	}
+	if options.RequestFile == "" {
+		return nil
+	}
+	if options.DryRun {
+		return errors.New("--request-file cannot be combined with --dry-run")
+	}
+	path, err := filepath.Abs(options.RequestFile)
+	if err != nil {
+		return errors.New("cannot resolve request file path")
+	}
+	options.RequestFile = path
+	return control.CheckRequestOutput(path)
 }
 
 func validateWait(options control.Options) error {

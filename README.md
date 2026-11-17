@@ -100,7 +100,8 @@ To change a cluster, submit a control and wait for the operator to act on it:
 ```sh
 kubebao maintenance enable prod -n security --wait
 kubebao restart prod -n security --dry-run
-kubebao restart prod -n security --wait --wait-timeout 10m
+kubebao restart prod -n security --wait --wait-timeout 10m --request-file prod-restart.json
+kubebao observe --request-file prod-restart.json --wait
 ```
 
 To use `kubebao` as a kubectl plugin, put the binary on your `PATH` as `kubectl-kubebao`, then run `kubectl kubebao`.
@@ -125,6 +126,7 @@ The [installation guide](docs/installation.md) covers every channel, checksum ve
 | [`support-bundle`](docs/support-bundles.md) | Saves the doctor evidence and findings to a local archive | No |
 | [`pause`, `resume`](docs/controls.md) | Pauses or resumes operator reconciliation | Yes |
 | [`maintenance enable`, `disable`](docs/controls.md) | Sets maintenance mode | Yes |
+| [`observe`](docs/controls.md#continue-observation) | Verifies a saved request without submitting another change | No |
 | [`restart`](docs/controls.md#rolling-restart) | Requests an operator-managed rolling restart | Yes |
 | [`completion`](docs/installation.md#shell-completion) | Prints a bash, zsh, fish, or PowerShell completion script | No |
 | `version` | Prints build information without cluster access | No |

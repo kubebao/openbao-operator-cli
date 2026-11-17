@@ -27,7 +27,7 @@ HTTP 422 is reported as `invalid`: its status alone cannot distinguish validatio
 The command never refreshes a stale plan and resubmits it.
 
 `--dry-run` sends `dryRun=All` to the API server. `dry_run_accepted` describes a hypothetical result and does not establish
-that configuration persisted. It cannot be combined with `--wait`.
+that configuration persisted. It cannot be combined with `--wait` or `--request-file`.
 
 `accepted` means the API returned the requested value for the bound target. It does not establish that the operator
 observed the change. `unknown` means the response cannot establish whether the request persisted. Read the selected
@@ -87,19 +87,57 @@ A maintenance change can be accepted while reconciliation is paused. The command
 both controls, enable and verify maintenance before pausing. Resume and disable maintenance are separate actions.
 Workload reads are skipped when pause evidence already prevents propagation assessment.
 
+## Continue observation
+
+Add `--request-file FILE` to a control command to save its original plan before submission. The command creates a
+mode-0600 file and refuses to overwrite any destination. If saving fails, it submits nothing. The file contains the
+approved target identity, concurrency fields, and requested value or restart marker. It contains no kubeconfig,
+credentials, endpoint, provider message, or submission result. A saved file records intent; it does not prove that the
+API request was sent or accepted. Treat the file as local operational metadata.
+
+```sh
+kubebao restart prod -n security --kubeconfig ./config --context production \
+  --api-group kubebao.org --request-file prod-restart.json --wait --wait-timeout 5m
+
+# After a timeout, interruption, or unknown submission outcome:
+kubebao observe --request-file prod-restart.json --kubeconfig ./config --context production --wait
+```
+
+`observe` performs one assessment by default. `--wait` polls until observation succeeds, becomes blocked, or reaches
+`--wait-timeout`. It reuses the original plan, UID, and restart marker. It never submits a PATCH, creates a new marker,
+or resumes reconciliation. Namespace and API group come from the plan. Any supplied `--namespace` or `--api-group`
+must match. Select the original kubeconfig cluster and endpoint through the normal connection options. A different
+cluster origin is rejected before a target read. Replacement UIDs stop observation before workload reads.
+
+The file must use `kubebao-control-request/v1`, contain exactly one validated control or restart plan, and be a regular
+file of at most 32 KiB. Links, special files, duplicate keys, unknown fields, invalid intent, and trailing JSON are
+rejected before kubeconfig loading. Full command reports and support bundles are not request files. Dry-run commands
+cannot create request files. Without a saved original plan, inspect current status before deciding on another action.
+
+Observation confirms the current requested configuration and operator or workload evidence. It cannot reconstruct
+missed transitions, establish the original submission outcome, or attribute the current state to that request. It does
+not change the saved file. JSON reports set `readOnly: true` and omit `submission`. Exit `0` means the requested state
+is observed; exit `3` means it remains pending, blocked, or unconfirmed. Invalid input or a connection identity mismatch
+returns exit `1`. The original mutation's unknown outcome remains unknown.
+
 ## Output and permissions
 
 Text and JSON distinguish submission from assessment. Text starts with a verdict, explains the result in plain
-language, and suggests a follow-up command for the same target. A maintenance change that is blocked by pause suggests
-an explicit `kubebao resume` and never performs it. While `--wait` polls, a transient progress line on an interactive
-standard error shows the elapsed time and pending reasons; it is not written to pipes or files. JSON uses command schema `v1` with `target`, `plan`, `submission`,
+language, and suggests a follow-up command for the same target. Copyable commands preserve the resolved kubeconfig
+file precedence, exact context, namespace, and selected API group. Paths are absolute and arguments use POSIX shell
+quoting. Multiple kubeconfig files use an `env KUBECONFIG=...` prefix. Unsafe or redacted local metadata suppresses the
+command. Connection arguments remain process-local and are excluded from JSON and support bundles.
+
+A maintenance change that is blocked by pause suggests an explicit `kubebao resume` and never performs it. While
+`--wait` polls, a transient progress line on an interactive standard error shows the elapsed time and pending reasons.
+It is not written to pipes or files. JSON uses command schema `v1` with `target`, `plan`, `submission`,
 optional `assessment` and `assessmentPolicy`, `collection`, `warnings`, `resultCode`, and `exitCode`. Assessment policy
 records the analysis reference time and bounds. Plans contain approved identity and
 concurrency fields. Provider messages, raw Kubernetes resources, transport errors, and credentials are excluded.
 The assessment separates requested configuration from operator observation. Observed state does not attribute a
 change to this request or prove that another operation has stopped.
 
-- `0`: API acceptance, server dry-run acceptance, or requested observation when `--wait` is used.
+- `0`: API acceptance, server dry-run acceptance, or confirmed observation.
 - `1`: invalid input, configuration or output failure, ambiguous API selection, missing target, or API rejection.
 - `3`: incomplete collection, unsafe evidence, unknown submission without verified later state, blocked observation,
   replacement or deletion, cancellation, or an expired wait.
@@ -107,7 +145,8 @@ change to this request or prove that another operation has stopped.
 Controls require named-resource `get` and `patch` on `openbaoclusters` in the selected API group and namespace, plus
 access to its discovery endpoint. Automatic selection reads both declared discovery endpoints and requires an
 unambiguous result. Maintenance and restart waits also need namespace `list` on StatefulSets and Pods. Pause and resume waits need
-only the named cluster read. No Secret, Pod log or exec, OpenBao, or cloud API access is added.
+only the named cluster read. `observe` requires only these reads; it does not require `patch`. Its saved API group
+skips discovery. No Secret, Pod log or exec, OpenBao, or cloud API access is added.
 
 The shared client owns public projections, guarded submission, and pure assessments. The CLI owns credentials, API
 selection, polling, output, and exit codes. See [compatibility](compatibility.md) for validated versions and limits.

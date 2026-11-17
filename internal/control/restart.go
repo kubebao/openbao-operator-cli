@@ -14,6 +14,8 @@ import (
 // RestartReport separates a restart request from later rollout observations.
 // An observed rollout does not attribute Pod replacement to this request.
 type RestartReport struct {
+	ReadOnly         bool                         `json:"readOnly,omitempty"`
+	RequestFile      string                       `json:"-"`
 	SchemaVersion    string                       `json:"schemaVersion"`
 	Target           evidence.Target              `json:"target"`
 	ResultCode       string                       `json:"resultCode"`
@@ -49,6 +51,14 @@ func RunRestart(ctx context.Context, client *collect.Client, options Options) Re
 		return report
 	}
 	report.Plan = &plan
+	if options.RequestFile != "" {
+		request := Request{FormatVersion: requestVersion, Restart: &plan}
+		if options.DryRun || WriteRequest(ctx, options.RequestFile, request) != nil {
+			report.ResultCode, report.ExitCode = "request_not_saved", 1
+			return report
+		}
+		report.RequestFile = options.RequestFile
+	}
 	submit := operations.DefaultSubmitOptions()
 	submit.DryRun, submit.Timeout = options.DryRun, options.RequestTimeout
 	result, err := client.ControlClient().SubmitRestart(ctx, plan, submit)
@@ -72,8 +82,9 @@ func waitRestart(ctx context.Context, client *collect.Client, options Options, r
 			report.ResultCode, report.ExitCode = "wait_incomplete", 3
 			return report
 		}
+		report.Assessment, report.AssessmentPolicy = nil, nil
 		snapshot := client.Collect(ctx)
-		report.Collection = snapshot.Collection
+		report.Target, report.Collection = snapshot.Target, snapshot.Collection
 		cluster, ok := observed(snapshot)
 		if !ok {
 			report.ResultCode, report.ExitCode = snapshot.ResultCode, 3
@@ -97,6 +108,10 @@ func waitRestart(ctx context.Context, client *collect.Client, options Options, r
 		}
 		if assessment.State == operations.AssessmentBlocked {
 			report.ResultCode, report.ExitCode = "observation_blocked", 3
+			return report
+		}
+		if !options.Wait {
+			report.ResultCode, report.ExitCode = "observation_incomplete", 3
 			return report
 		}
 		if options.Observe != nil {

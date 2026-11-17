@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -116,12 +117,21 @@ func newClient(options Options) (*Client, error) {
 	}
 	// The origin is stable for this kubeconfig cluster and endpoint, without serializing the endpoint or credentials.
 	sum := sha256.Sum256([]byte(selected.Cluster + "\x00" + config.Host))
+	selection := &evidence.Selection{Context: contextName}
+	for _, path := range rules.GetLoadingPrecedence() {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, errors.New("cannot resolve kubeconfig path")
+		}
+		selection.KubeconfigFiles = append(selection.KubeconfigFiles, absolute)
+	}
 	return &Client{
 		shared:   client,
 		controls: controls,
 		origin:   "kubeconfig:" + hex.EncodeToString(sum[:16]),
 		timeout:  options.RequestTimeout,
 		target: evidence.Target{
+			Selection:         selection,
 			Context:           evidence.Clean(contextName),
 			KubernetesCluster: evidence.Clean(selected.Cluster),
 			Namespace:         namespace,
