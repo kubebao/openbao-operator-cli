@@ -35,6 +35,11 @@ Linux Homebrew installation, Apple signing, notarization, or managed-device down
 
 Packaging checks do not connect to an operator or extend the runtime baselines below.
 
+Edge publication requires successful main Check and CodeQL jobs, authenticated CI provenance, and the same native
+four-platform checks on the exact candidate payload. Tagged publication builds the selected version independently and
+verifies it before finalizing an immutable release. An edge or stable channel label does not extend operator, Apple,
+production, or HA qualification.
+
 ### Operator capabilities
 
 | Level | Coverage | Limits |
