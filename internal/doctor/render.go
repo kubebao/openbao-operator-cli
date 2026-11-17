@@ -27,6 +27,9 @@ func WriteText(writer io.Writer, report Report, resultCode string, options TextO
 	}
 	var b strings.Builder
 	target := report.Evidence.Target
+	if options.Offline {
+		target.Selection = nil
+	}
 	b.WriteString(heading(target, options.Offline) + "\n")
 	if options.Offline {
 		b.WriteString(render.Faint(fmt.Sprintf("Captured %s to %s · analysed as of %s",
@@ -75,7 +78,7 @@ func writeUnavailable(b *strings.Builder, report Report, target evidence.Target,
 	b.WriteString("\n" + render.Status(render.Bad, "Diagnosis not possible") + "\n")
 	b.WriteString("  OpenBaoCluster " + target.Name + " " + render.TargetResult(report.Evidence.ResultCode) + ".\n")
 	if report.Evidence.ResultCode == "not_found" {
-		b.WriteString(render.NextCommand("Check the namespace and context, or list clusters:", "kubectl get openbaoclusters -A", "  "))
+		b.WriteString(render.NextCommand("Check the namespace and context, or list clusters:", render.ClusterCommand(target, "list"), "  "))
 	}
 }
 
@@ -176,21 +179,18 @@ func kubectlCommand(refs []evidence.Reference, target evidence.Target) string {
 	if group, _, found := strings.Cut(ref.APIVersion, "/"); found && strings.Contains(group, ".") && group != "apps" {
 		resource = strings.ToLower(ref.Kind) + "s." + group
 	}
-	parts := []string{"kubectl"}
-	if target.Context != "" {
-		parts = append(parts, "--context", target.Context)
-	}
+	parts := []string{}
 	if ref.Namespace != "" {
 		parts = append(parts, "-n", ref.Namespace)
 	}
 	for _, candidate := range refs {
 		condition, found := strings.CutPrefix(candidate.Field, "status.conditions[type=")
 		if found && strings.HasSuffix(condition, "]") && candidate.Name == ref.Name && ref.Kind == "OpenBaoCluster" {
-			jsonpath := `'{.status.conditions[?(@.type=="` + strings.TrimSuffix(condition, "]") + `")]}'`
-			return strings.Join(append(parts, "get", resource, ref.Name, "-o", "jsonpath="+jsonpath), " ")
+			jsonpath := `{.status.conditions[?(@.type=="` + strings.TrimSuffix(condition, "]") + `")]}`
+			return render.LocalCommand(target, "kubectl", append(parts, "get", resource, ref.Name, "-o", "jsonpath="+jsonpath)...)
 		}
 	}
-	return strings.Join(append(parts, "describe", resource, ref.Name), " ")
+	return render.LocalCommand(target, "kubectl", append(parts, "describe", resource, ref.Name)...)
 }
 
 func writeGaps(b *strings.Builder, report Report) {

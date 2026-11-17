@@ -22,6 +22,10 @@ On a terminal, text output uses colour and these symbols:
 Select colour with `--color auto`, `always`, or `never`. `auto` honours `NO_COLOR`. Pipes, files, and JSON never
 receive escape sequences.
 
+Copyable follow-up commands preserve the live connection selection and quote arguments for POSIX shells. Local
+kubeconfig paths and exact connection arguments are excluded from JSON and support bundles. Offline diagnosis gives
+suggested checks without executable commands because a capture cannot select a trusted local connection.
+
 `--version` has no short form. `-v` means `--verbose` on `status` and `doctor`.
 
 ## Exit codes

@@ -82,6 +82,7 @@ func newCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 	)
 	inspect := []*cobra.Command{
 		newListCommand(info, term), newStatusCommand(info, term), newDoctorCommand(info, term), newBundleCommand(info, term),
+		newObserveCommand(info, term),
 	}
 	control := []*cobra.Command{
 		newPauseCommand(info, term, true), newPauseCommand(info, term, false), newMaintenanceCommand(info, term),

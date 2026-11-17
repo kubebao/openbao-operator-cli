@@ -26,6 +26,9 @@ pinned. Migration annotations do not establish identity across groups.
 
 ## Validation levels
 
+Saved-request continuation and connection-preserving follow-up commands have synthetic command and shell-argument
+regressions. These checks do not add operator runtime qualification to the baselines below.
+
 ### Distribution
 
 The **Distribution rehearsal** workflow exercises Linux and macOS archives natively on amd64 and arm64. It verifies
@@ -39,7 +42,7 @@ Packaging checks do not connect to an operator or extend the runtime baselines b
 
 | Level | Coverage | Limits |
 | --- | --- | --- |
-| Command tests | Synthetic text and JSON output, API selection, request paths and selectors, permissions, pagination and candidate limits, UID deletion and replacement, cancellation, timeouts, redirects, output failures, and sensitive-data exclusion | No API-server defaulting, admission, RBAC, or reconciliation |
+| Command tests | Synthetic text and JSON output, API selection, request paths and selectors, permissions, pagination and candidate limits, UID deletion and replacement, saved-request validation, read-only control continuation, shell-quoted connection preservation, cancellation, timeouts, redirects, output failures, and sensitive-data exclusion | No API-server defaulting, admission, RBAC, or reconciliation |
 | Observation and controls | Legacy operator `0.6.1` and native candidate `22894cdc0a4aa5c442a07f2bf9902fe28ce02ea1` on Kubernetes 1.36.1, Linux/arm64, OpenBao 2.7.2 | See [observation and controls](#observation-and-controls) |
 | Nonempty restore observation | Native build `587dd16386bc5a234520e22eec1bbedb904fa6dd` and legacy operator `0.6.1` | See [restore observation](#restore-observation) |
 | Rolling restart | Native operator `0.7.0-rc.1`, source `7b9bbf8b1a2aa3a62e2235607073df3e912643b5` | See [rolling restart](#rolling-restart) |

@@ -59,6 +59,7 @@ func WriteText(writer io.Writer, report Report, options Options, text TextOption
 	a := controlAction(options)
 	v := view{target: report.Target, text: text, action: a, result: report.ResultCode, submission: report.Submission}
 	v.assessment = report.Assessment
+	v.readOnly, v.requestFile = report.ReadOnly, report.RequestFile
 	for _, warning := range report.Warnings {
 		if warning == "maintenance_propagation_blocked_paused" {
 			v.pausedWarning = true
@@ -71,7 +72,7 @@ func WriteText(writer io.Writer, report Report, options Options, text TextOption
 func WriteRestartText(writer io.Writer, report RestartReport, text TextOptions) error {
 	a := action{
 		noun: "Rolling restart", done: "requested", field: "spec.runtime.restartAt",
-		observed: "Every managed StatefulSet and Pod runs with the new restart marker and reports Ready. " +
+		observed: "Every managed StatefulSet and Pod runs with the requested restart marker and reports Ready. " +
 			"This does not prove serving health or Raft quorum.",
 	}
 	if report.Plan != nil {
@@ -79,7 +80,7 @@ func WriteRestartText(writer io.Writer, report RestartReport, text TextOptions) 
 	}
 	v := view{
 		target: report.Target, text: text, action: a, result: report.ResultCode, submission: report.Submission,
-		assessment: report.Assessment,
+		assessment: report.Assessment, readOnly: report.ReadOnly, requestFile: report.RequestFile,
 	}
 	extra := []render.Field{}
 	if report.Assessment != nil {
@@ -91,6 +92,8 @@ func WriteRestartText(writer io.Writer, report RestartReport, text TextOptions) 
 }
 
 type view struct {
+	readOnly      bool
+	requestFile   string
 	target        evidence.Target
 	text          TextOptions
 	action        action
@@ -105,6 +108,18 @@ func (v view) write(writer io.Writer, extra []render.Field) error {
 		v.text.Width = 100
 	}
 	tone, headline, notes, next := v.outcome()
+	if v.readOnly {
+		notes = append(
+			notes,
+			"Read-only observation. The saved request records intent, not API acceptance or the cause of the current state.",
+		)
+	}
+	if v.requestFile != "" && v.result != "observed" && v.result != "invalid_request_target" {
+		next = append([]step{{
+			"Continue verification without submitting a change:",
+			render.ClusterCommand(v.target, "observe", "--request-file", v.requestFile, "--wait"),
+		}}, next...)
+	}
 	var b strings.Builder
 	b.WriteString(render.Status(tone, headline) + "\n")
 	for _, note := range notes {
@@ -119,6 +134,9 @@ func (v view) write(writer io.Writer, extra []render.Field) error {
 	}
 	fields := []render.Field{{Label: "Cluster", Value: "OpenBaoCluster " + v.target.Namespace + "/" + v.target.Name +
 		render.Faint(" · "+orUnknown(v.target.APIGroup))}}
+	if v.requestFile != "" {
+		fields = append(fields, render.Field{Label: "Request file", Value: evidence.Clean(v.requestFile)})
+	}
 	if v.action.value != "" {
 		fields = append(fields, render.Field{Label: "Change", Value: v.action.field + " = " + v.action.value})
 	}
@@ -151,6 +169,9 @@ type step struct {
 
 // outcome maps result codes to a verdict, explanation, and next steps. Codes remain in JSON.
 func (v view) outcome() (render.Tone, string, []string, []step) {
+	if v.readOnly {
+		return v.observationOutcome()
+	}
 	name, a := v.target.Name, v.action
 	status := step{"Check the current state:", v.command("kubebao status")}
 	resume := step{"Resume reconciliation when ready; kubebao never resumes implicitly:", v.command("kubebao resume")}
@@ -176,7 +197,7 @@ func (v view) outcome() (render.Tone, string, []string, []step) {
 		}
 		return render.Good, a.noun + " confirmed for " + name, notes, nil
 	case "observation_blocked":
-		notes := []string{"The API server accepted the change, but the operator cannot apply it yet."}
+		notes := []string{"Later evidence does not confirm the requested state; a restriction blocks the operator."}
 		next := []step{{"Find the blocking restriction:", v.command("kubebao status")}}
 		if v.pausedWarning || v.hasReason(operations.ReasonPaused) {
 			notes = append(notes, "Reconciliation is paused.")
@@ -185,11 +206,11 @@ func (v view) outcome() (render.Tone, string, []string, []step) {
 		return render.Warn, a.noun + " " + a.done + " for " + name + ", but not yet applied", notes, next
 	case "wait_incomplete":
 		return render.Unknown, "Stopped waiting before the operator confirmed the change",
-			[]string{"The change was submitted. The wait ended at the timeout or was interrupted; nothing was undone."},
+			[]string{"Verification timed out or was interrupted. The request was not retried; nothing was undone."},
 			[]step{{"Check progress:", v.command("kubebao status")}}
 	case "assessment_incomplete":
 		return render.Unknown, "Submitted, but the result could not be assessed",
-			[]string{"The change was submitted. Later evidence was incomplete, so the operator's response is unknown."},
+			[]string{"Later evidence was incomplete, so the operator's response is unknown. The request was not retried."},
 			[]step{status}
 	case "unknown":
 		return render.Unknown, "Submission outcome unknown",
@@ -219,6 +240,9 @@ func (v view) outcome() (render.Tone, string, []string, []step) {
 		return render.Bad, "Not submitted: the cluster evidence is not safe to act on",
 			[]string{"The cluster is being deleted, has unacknowledged changes, or reports fields kubebao cannot interpret."},
 			[]step{status}
+	case "request_not_saved":
+		return render.Bad, "Not submitted: the original request could not be saved",
+			[]string{"Choose a new writable --request-file path. Nothing was submitted."}, nil
 	case "invalid_control_request", "invalid_restart_request":
 		return render.Bad, "Not submitted: the request could not be built", nil, nil
 	default:
@@ -226,11 +250,33 @@ func (v view) outcome() (render.Tone, string, []string, []step) {
 			notes := []string{"OpenBaoCluster " + name + " " + render.TargetResult(v.result) + ". Nothing was submitted."}
 			var next []step
 			if v.result == "not_found" {
-				next = []step{{"Check the namespace and context, or list clusters:", "kubectl get openbaoclusters -A"}}
+				next = []step{{"Check the namespace and context, or list clusters:", render.ClusterCommand(v.target, "list")}}
 			}
 			return render.Bad, "Could not read the cluster", notes, next
 		}
 		return render.Unknown, "Result: " + render.Humanize(v.result), nil, []step{status}
+	}
+}
+
+func (v view) observationOutcome() (render.Tone, string, []string, []step) {
+	status := []step{{"Check the current state:", v.command("kubebao status")}}
+	switch v.result {
+	case "observed":
+		return render.Good, v.action.noun + " confirmed for " + v.target.Name, []string{v.action.observed}, nil
+	case "observation_blocked":
+		return render.Warn, "Observation blocked", []string{"A restriction prevents confirmation of the saved request."}, status
+	case "observation_incomplete":
+		return render.Unknown, "Requested state is not confirmed", []string{
+			"The assessment is pending or evidence is insufficient.",
+		}, status
+	case "wait_incomplete":
+		return render.Unknown, "Stopped waiting before confirmation", []string{"The wait timed out or was interrupted."}, status
+	case "invalid_request_target":
+		return render.Bad, "Saved request does not match the selected target",
+			[]string{"Check the kubeconfig cluster, API endpoint, namespace, and API group. No target was read."}, nil
+	default:
+		return render.Unknown, "Observation incomplete",
+			[]string{"The requested state could not be assessed: " + render.Humanize(v.result) + "."}, status
 	}
 }
 
@@ -246,16 +292,9 @@ func (v view) hasReason(reason operations.AssessmentReason) bool {
 	return false
 }
 
-// command builds a follow-up command for the same cluster, context, and namespace.
+// command builds a follow-up for the same local connection and selected API group.
 func (v view) command(base string) string {
-	parts := []string{base, v.target.Name}
-	if v.target.Namespace != "" {
-		parts = append(parts, "-n", v.target.Namespace)
-	}
-	if v.target.Context != "" {
-		parts = append(parts, "--context", v.target.Context)
-	}
-	return strings.Join(parts, " ")
+	return render.ClusterCommand(v.target, strings.TrimPrefix(base, "kubebao "), v.target.Name)
 }
 
 func submission(outcome operations.Outcome) string {

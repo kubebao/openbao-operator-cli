@@ -21,12 +21,15 @@ type Options struct {
 	WaitTimeout    time.Duration
 	PollInterval   time.Duration
 	RequestTimeout time.Duration
+	RequestFile    string
 	// Observe receives each assessment that is still pending during a wait. It must not block.
 	Observe func(operations.Assessment)
 }
 
-// Report separates API acceptance from observation. Assessment is absent without --wait.
+// Report separates API acceptance from observation. Read-only observation has no Submission.
 type Report struct {
+	ReadOnly         bool                         `json:"readOnly,omitempty"`
+	RequestFile      string                       `json:"-"`
 	SchemaVersion    string                       `json:"schemaVersion"`
 	Target           evidence.Target              `json:"target"`
 	ResultCode       string                       `json:"resultCode"`
@@ -62,6 +65,14 @@ func Run(ctx context.Context, client *collect.Client, options Options) Report {
 	report.Plan = &plan
 	if options.Control == operations.ControlMaintenance && cluster.Paused.Value != nil && *cluster.Paused.Value {
 		report.Warnings = append(report.Warnings, "maintenance_propagation_blocked_paused")
+	}
+	if options.RequestFile != "" {
+		request := Request{FormatVersion: requestVersion, Control: &plan}
+		if options.DryRun || WriteRequest(ctx, options.RequestFile, request) != nil {
+			report.ResultCode, report.ExitCode = "request_not_saved", 1
+			return report
+		}
+		report.RequestFile = options.RequestFile
 	}
 	submit := operations.DefaultSubmitOptions()
 	submit.DryRun, submit.Timeout = options.DryRun, options.RequestTimeout
@@ -112,8 +123,9 @@ func wait(ctx context.Context, client *collect.Client, options Options, report R
 			report.ResultCode, report.ExitCode = "wait_incomplete", 3
 			return report
 		}
+		report.Assessment, report.AssessmentPolicy = nil, nil
 		snapshot := client.Collect(ctx)
-		report.Collection = snapshot.Collection
+		report.Target, report.Collection = snapshot.Target, snapshot.Collection
 		cluster, ok := observed(snapshot)
 		if !ok {
 			report.ResultCode, report.ExitCode = snapshot.ResultCode, 3
@@ -145,6 +157,10 @@ func wait(ctx context.Context, client *collect.Client, options Options, report R
 		}
 		if assessment.State == operations.AssessmentBlocked {
 			report.ResultCode, report.ExitCode = "observation_blocked", 3
+			return report
+		}
+		if !options.Wait {
+			report.ResultCode, report.ExitCode = "observation_incomplete", 3
 			return report
 		}
 		if options.Observe != nil {

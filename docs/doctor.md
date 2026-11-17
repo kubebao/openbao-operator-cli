@@ -124,8 +124,10 @@ a short message to standard error. Exit code `1` prefixes it with `Error:`; find
 Resource names and approved operational metadata remain in the evidence.
 
 Text output starts with a verdict, severity counts, and rule coverage counts. Info findings count as notes. Findings are ordered by severity. Each
-shows the rule's check name and ID, the shared summary, the suggested check, and a read-only `kubectl describe` command for
-the first referenced resource. Condition findings are titled by condition type and suggest a `kubectl get` with a
+shows the rule's check name and ID, the shared summary, and the suggested check. Live diagnosis adds a read-only
+`kubectl describe` command for the first referenced resource. Commands retain the local kubeconfig selection and quote
+arguments for POSIX shells. Offline diagnosis omits executable commands because captured context names cannot select a
+trusted local connection. Condition findings are titled by condition type; live diagnosis suggests a `kubectl get` with a
 JSONPath that prints only that condition, including the operator's message, which kubebao does not project. Rules
 without enough evidence are listed with the reasons; condition gaps name each `Unknown` or unacknowledged condition. A resource tree shows the
 cluster, its StatefulSets, their Pods, and restores. Placement follows recorded owner UIDs only; names and labels never

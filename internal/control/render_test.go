@@ -55,7 +55,12 @@ func TestRestartTextSeparatesMarkerAndRollout(t *testing.T) {
 	t.Parallel()
 	var buffer bytes.Buffer
 	report := RestartReport{
-		Target: evidence.Target{Namespace: "security", Name: "vault"}, ResultCode: "wait_incomplete",
+		Target: evidence.Target{
+			Namespace: "security",
+			Name:      "vault",
+			Selection: &evidence.Selection{Context: "prod", KubeconfigFiles: []string{"/config"}},
+		},
+		ResultCode: "wait_incomplete",
 		Plan:       &operations.RestartPlan{RestartAt: "2026-11-14T12:00:00Z"},
 		Submission: &operations.Result{Outcome: operations.OutcomeAccepted},
 		Assessment: &operations.Assessment{

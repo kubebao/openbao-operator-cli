@@ -30,7 +30,7 @@ func newRestartCommand(info buildinfo.Info, term *terminal) *cobra.Command {
 			if output != "text" && output != "json" {
 				return fmt.Errorf("unsupported output format %q: use text or json", output)
 			}
-			if err := validateWait(options); err != nil {
+			if err := validateControlOptions(command, &options); err != nil {
 				return err
 			}
 			access.Name, options.RequestTimeout = args[0], access.RequestTimeout

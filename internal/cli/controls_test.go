@@ -27,6 +27,8 @@ type controlFixture struct {
 	status                                         int
 	unknown, stalled, replacement, deniedWorkloads bool
 	patches                                        atomic.Int32
+	onGet                                          func()
+	onPatch                                        func()
 }
 
 func (f *controlFixture) state() (bool, bool, int) {
@@ -66,6 +68,9 @@ func (f *controlFixture) serve(t *testing.T) *httptest.Server {
 			if r.Method != http.MethodGet {
 				t.Errorf("unexpected method: %s", r.Method)
 			}
+			if f.onGet != nil {
+				f.onGet()
+			}
 			f.write(w, f.paused, f.maintenance, f.generation)
 		case "/apis/apps/v1/namespaces/context-namespace/statefulsets", "/api/v1/namespaces/context-namespace/pods":
 			if r.Method != http.MethodGet || r.URL.Query().Get("labelSelector") != "openbao.org/cluster=prod" {
@@ -84,6 +89,9 @@ func (f *controlFixture) serve(t *testing.T) *httptest.Server {
 func (f *controlFixture) patch(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	t.Helper()
 	f.patches.Add(1)
+	if f.onPatch != nil {
+		f.onPatch()
+	}
 	if r.Header.Get("Content-Type") != "application/json-patch+json" {
 		t.Error("control is not JSON Patch")
 	}
