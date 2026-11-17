@@ -56,6 +56,7 @@ the analysis reference time. No separate rule-set version is required.
 | `KBAO-BACKUP-001` | Recorded consecutive backup failures |
 | `KBAO-BACKUP-002` | Configured backups with no recorded successful completion |
 | `KBAO-BACKUP-003` | Backup age exceeds `--max-backup-age`; excluded when the option is omitted |
+| `KBAO-RESTORETEST-001` | Recorded failed restore test or a current blocked restore-test condition |
 | `KBAO-UPGRADE-001` | Recorded rolling-upgrade failure |
 | `KBAO-WORKLOAD-001` | UID-associated StatefulSet readiness and its generation |
 | `KBAO-POD-001` | UID-associated Pod phase, condition acknowledgement, readiness, and population |
@@ -70,6 +71,12 @@ The CLI policy excludes historical restore failures without a current correlated
 can produce informational findings. Pause, maintenance, and holds remain independent restrictions. Missing optional
 controls do not prove that they are disabled. An unavailable restore API is incomplete evidence, not proof that restore
 analysis is inapplicable. Pod condition acknowledgement is independent of cluster or StatefulSet acknowledgement.
+
+Restore-test diagnosis reads `status.backup.restoreTest` from the cluster. The rule is excluded when the cluster reports
+no backup configuration. A current blocked `Passed` condition raises a warning. Otherwise, an active reservation
+suppresses the previous failed result. Missing or stale condition evidence
+keeps coverage incomplete; a recorded failure can remain visible with incomplete coverage. A test result covers its
+snapshot and disposable target only. It does not establish application recovery or current client availability.
 
 A uniquely held disposable target can produce an informational restore finding while its cleanup retention period is
 active, even when the reported phase and execution stage remain `Unknown`. This requires complete reads, confirmed UID

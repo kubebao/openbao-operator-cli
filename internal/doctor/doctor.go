@@ -49,7 +49,25 @@ type Report struct {
 	Complete       bool              `json:"-"`
 }
 
-func Policy(at time.Time) diagnose.Policy {
+// Policy selects restore-test diagnosis unless the capture reports no backup configuration.
+// The selected rules are recorded before analysis and remain unchanged during offline replay.
+func Policy(snapshot evidence.Snapshot) diagnose.Policy {
+	p := basePolicy(snapshot.CompletedAt)
+	if capture := snapshot.NormalizedEvidence; capture != nil && len(capture.Clusters) == 1 {
+		if cluster := capture.Clusters[0].Observation; cluster != nil && cluster.Backup.Configuration == shared.ObjectAbsent {
+			selected := p.Rules[:0]
+			for _, rule := range p.Rules {
+				if rule != diagnose.RuleRestoreTest {
+					selected = append(selected, rule)
+				}
+			}
+			p.Rules = selected
+		}
+	}
+	return p
+}
+
+func basePolicy(at time.Time) diagnose.Policy {
 	p := diagnose.DefaultPolicy(at)
 	p.Rules = []diagnose.RuleID{
 		diagnose.RuleGeneration,
@@ -59,6 +77,7 @@ func Policy(at time.Time) diagnose.Policy {
 		diagnose.RuleController,
 		diagnose.RuleBackupFailed,
 		diagnose.RuleBackupAbsent,
+		diagnose.RuleRestoreTest,
 		diagnose.RuleUpgrade,
 		diagnose.RuleWorkload,
 		diagnose.RulePod,
@@ -80,7 +99,7 @@ func WithBackupAge(p diagnose.Policy, limit time.Duration) diagnose.Policy {
 }
 
 func StatusPolicy(at time.Time) diagnose.Policy {
-	p := Policy(at)
+	p := basePolicy(at)
 	p.Rules = []diagnose.RuleID{
 		diagnose.RuleGeneration,
 		diagnose.RuleAvailability,
@@ -211,6 +230,8 @@ func suggestedCheck(rule diagnose.RuleID, subsubject string) string {
 		return "Inspect recorded backup results and the declared backup policy; configuration does not verify provider access."
 	case diagnose.RuleUpgrade:
 		return "Inspect the recorded upgrade failure and current operator progress before taking action."
+	case diagnose.RuleRestoreTest:
+		return "Inspect the recorded restore-test condition and snapshot result; a disposable test does not verify application recovery."
 	default:
 		return "Inspect the referenced public operator fields."
 	}

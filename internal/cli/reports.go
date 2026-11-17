@@ -84,7 +84,7 @@ func diagnosticResultWithPolicy(snapshot evidence.Snapshot, threshold string, po
 }
 
 func diagnosticPolicy(snapshot evidence.Snapshot, maxBackupAge time.Duration) diagnose.Policy {
-	return doctor.WithBackupAge(doctor.Policy(snapshot.CompletedAt), maxBackupAge)
+	return doctor.WithBackupAge(doctor.Policy(snapshot), maxBackupAge)
 }
 
 func writeJSON(writer io.Writer, value any) error {

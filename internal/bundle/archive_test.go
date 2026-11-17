@@ -21,11 +21,12 @@ import (
 
 func partialFixture() Bundle {
 	at := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
-	return New(evidence.Snapshot{
+	snapshot := evidence.Snapshot{
 		StartedAt: at, CompletedAt: at, ResultCode: "incomplete",
 		Target:     evidence.Target{Context: "fixture", Namespace: "security", Name: "prod"},
 		Collection: []evidence.Step{{Action: "discover", Outcome: "denied", CollectedAt: at}},
-	}, doctor.Policy(at), buildinfo.Info{Version: "test"}, time.Second)
+	}
+	return New(snapshot, doctor.Policy(snapshot), buildinfo.Info{Version: "test"}, time.Second)
 }
 
 func TestPrivateAtomicPublicationAndOverwrite(t *testing.T) {
