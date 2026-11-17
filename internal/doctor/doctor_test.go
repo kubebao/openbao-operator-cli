@@ -22,7 +22,7 @@ func TestValidationFieldIsReportedWithoutRejectedEvidence(t *testing.T) {
 	snapshot.NormalizedEvidence.Clusters[0].Pods.Observations[0].Metadata.Reference.ResourceVersion = shared.Text{
 		State: shared.ValueInvalid, Value: &canary,
 	}
-	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	report, err := Analyze(snapshot, Policy(snapshot))
 	want := "clusters[0].pods.observations[0].metadata.reference.resourceVersion"
 	if err == nil || report.ValidationPath != want || strings.Contains(err.Error(), "CANARY") || report.Evidence.NormalizedEvidence != nil {
 		t.Fatal("invalid capture lost its safe path or retained rejected evidence")
@@ -42,7 +42,7 @@ func TestAllSharedCoverageCausesReachCLIReports(t *testing.T) {
 	for index := range input.Pods.Observations[0].Conditions.Values {
 		input.Pods.Observations[0].Conditions.Values[index].ObservedGeneration = shared.Integer{State: shared.ValueUnknown}
 	}
-	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	report, err := Analyze(snapshot, Policy(snapshot))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestSharedAnalysisReplayAndIndependentFindingIdentity(t *testing.T) {
 	second.Metadata.Reference.Identity.UID = "pod-2"
 	input.Pods.Observations = append(input.Pods.Observations, second)
 	input.Pods.Collection.Items = 2
-	policy := Policy(snapshot.CompletedAt)
+	policy := Policy(snapshot)
 	report, err := Analyze(snapshot, policy)
 	if err != nil || !report.Complete || len(report.Findings) != 2 {
 		t.Fatalf("analysis: %+v, %v", report, err)
@@ -268,7 +268,7 @@ func TestIncompleteCoverageRetainsIndependentFindings(t *testing.T) {
 	input.Pods.Collection.Outcome = shared.CollectionDenied
 	input.Pods.Collection.Items = 0
 	input.Pods.Observations = []shared.Pod{}
-	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	report, err := Analyze(snapshot, Policy(snapshot))
 	if err != nil || report.Complete || len(report.Findings) != 1 || report.Findings[0].RuleID != string(diagnose.RuleAvailability) {
 		t.Fatalf("independent finding lost: %+v, %v", report, err)
 	}
@@ -277,12 +277,12 @@ func TestIncompleteCoverageRetainsIndependentFindings(t *testing.T) {
 func TestOnlyNormalizedEvidenceDrivesAnalysis(t *testing.T) {
 	snapshot := captureFixture(t)
 	snapshot.Observation = &evidence.Observation{Phase: "Failed"}
-	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	report, err := Analyze(snapshot, Policy(snapshot))
 	if err != nil || !report.Complete || len(report.Findings) != 0 {
 		t.Fatalf("legacy display drove diagnosis: %+v %v", report, err)
 	}
 	snapshot.NormalizedEvidence.Clusters[0].Observation.Reference.APIVersion = "unsupported/v1"
-	if _, err := Analyze(snapshot, Policy(snapshot.CompletedAt)); err == nil {
+	if _, err := Analyze(snapshot, Policy(snapshot)); err == nil {
 		t.Fatal("invalid normalized evidence was accepted")
 	}
 }
@@ -293,13 +293,14 @@ func TestBackupAgeRequiresDeclaredThreshold(t *testing.T) {
 	zero := int64(0)
 	last := snapshot.StartedAt.Add(-4 * time.Hour)
 	backup.Configuration, backup.State = shared.ObjectReported, shared.ObjectReported
+	backup.RestoreTest.State = shared.ObjectAbsent
 	backup.ConsecutiveFailures = shared.Integer{State: shared.ValueReported, Value: &zero}
 	backup.LastSuccessAt = shared.Timestamp{State: shared.ValueReported, Value: &last}
 	for _, tc := range []struct {
 		limit time.Duration
 		want  bool
 	}{{0, false}, {3 * time.Hour, true}, {5 * time.Hour, false}} {
-		policy := WithBackupAge(Policy(snapshot.CompletedAt), tc.limit)
+		policy := WithBackupAge(Policy(snapshot), tc.limit)
 		report, err := Analyze(snapshot, policy)
 		if err != nil || !report.Complete {
 			t.Fatalf("backup policy analysis incomplete: %v", err)
@@ -325,12 +326,13 @@ func TestExpandedPolicyReportsRecordedOperatorFailures(t *testing.T) {
 	cluster.WorkloadError = failure
 	cluster.Upgrade.State, cluster.Upgrade.Failure = shared.ObjectReported, failure
 	cluster.Backup.State, cluster.Backup.Configuration = shared.ObjectReported, shared.ObjectReported
+	cluster.Backup.RestoreTest.State = shared.ObjectAbsent
 	failures := int64(2)
 	cluster.Backup.ConsecutiveFailures = shared.Integer{State: shared.ValueReported, Value: &failures}
 	condition := cluster.Conditions.Values[0]
 	condition.Type, condition.Status = "TLSReady", shared.ConditionFalse
 	cluster.Conditions.Values = append(cluster.Conditions.Values, condition)
-	report, err := Analyze(snapshot, Policy(snapshot.CompletedAt))
+	report, err := Analyze(snapshot, Policy(snapshot))
 	if err != nil || !report.Complete {
 		t.Fatalf("expanded policy could not evaluate recorded failures: %v", err)
 	}

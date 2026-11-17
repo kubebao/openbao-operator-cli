@@ -47,6 +47,10 @@ Packaging checks do not connect to an operator or extend the runtime baselines b
 API discovery, compilation, and synthetic fixtures do not qualify an operator build. Each release records the exact CLI,
 client, operator image and CRD, and Kubernetes identities it was qualified against in its release notes.
 
+Synthetic restore-test command checks cover failed, blocked, active, passed, unknown, stale, and incomplete results.
+They verify warning findings, incomplete-evidence precedence, sensitive-message exclusion, and identical live/offline
+findings, coverage, and captured policy. These checks do not qualify restore-test execution against an operator.
+
 ### Observation and controls
 
 The fixtures use disposable clusters with self-initialization, the Development profile, and enabled admission policies.
