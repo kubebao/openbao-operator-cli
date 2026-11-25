@@ -26,7 +26,7 @@ in
       ../THIRD_PARTY_LICENSES
     ];
   };
-  vendorHash = "sha256-MPv7Jnz2wBli+XHvUVk1aOkt1PC2we5TuIg6oOsGZTM=";
+  vendorHash = "sha256-IHM5AX4LPwjc4ionjBjtD50IN+5k/dCVkwFlH7vghcQ=";
   overrideModAttrs = _: { name = "kubebao-go-modules"; };
   subPackages = [ "cmd/kubebao" ];
   env = {
