@@ -16,7 +16,7 @@
 
 > [!NOTE]
 > **Not released yet.** Build `kubebao` from source. Release archives, Homebrew, and Krew are prepared but not
-> published. See [installation](docs/installation.md).
+> published. Edge and tagged release publishing remain disabled. See [installation](docs/installation.md).
 
 ```text
 $ kubebao doctor prod -n security

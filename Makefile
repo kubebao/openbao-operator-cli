@@ -1,4 +1,4 @@
-.PHONY: install lint lint-fix test check build dist release-dist release-check verify-dist verify-homebrew vulncheck licenses check-licenses secret-scan check-workflows
+.PHONY: install lint lint-fix test check build dist release-dist release-check verify-dist verify-homebrew vulncheck licenses check-licenses secret-scan check-workflows check-release-notes
 
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 GITLEAKS = go run github.com/zricethezav/gitleaks/v8@v8.30.1
@@ -29,7 +29,10 @@ lint-fix:
 test:
 	go test -race ./...
 
-check: lint test build check-workflows
+check: lint test build check-workflows check-release-notes
+
+check-release-notes:
+	python3 scripts/release_policy.py check-notes
 
 build:
 	mkdir -p bin

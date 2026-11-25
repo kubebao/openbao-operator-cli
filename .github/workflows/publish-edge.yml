@@ -1,0 +1,113 @@
+name: Publish Edge
+
+on:
+  workflow_run:
+    workflows: [Check, CodeQL]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  attestations: read
+
+concurrency:
+  group: publish-edge
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  source:
+    name: Select qualified main build
+    if: >-
+      github.repository == 'kubebao/openbao-operator-cli' && !github.event.repository.private &&
+      vars.CLI_EDGE_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.source.outputs.ready }}
+      run_id: ${{ steps.source.outputs.run_id }}
+      run_attempt: ${{ steps.source.outputs.run_attempt }}
+    steps:
+      # Run helpers from the trusted default-branch workflow, never from an artifact.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLI_EDGE_ENABLED: ${{ vars.CLI_EDGE_ENABLED }}
+        run: python3 scripts/edge_release.py source
+
+  native:
+    name: Qualify edge (${{ matrix.runner }})
+    needs: source
+    if: needs.source.outputs.ready == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      BUILD_RUN_ID: ${{ needs.source.outputs.run_id }}
+      BUILD_RUN_ATTEMPT: ${{ needs.source.outputs.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli-edge-candidate-${{ needs.source.outputs.run_attempt }}
+          path: payload
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.run_id }}
+      - name: Authenticate CI provenance and validate the payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/edge_release.py verify payload --proof
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify native archive, Krew, and source build
+        run: python3 scripts/verify_dist.py payload --smoke --krew --source-build --expect-kind snapshot --expect-signing none
+      - name: Verify source Homebrew formula
+        if: runner.os == 'macOS'
+        run: make verify-homebrew DIST_DIR=payload
+
+  publish:
+    name: Publish immutable edge downloads
+    needs: [source, native]
+    if: needs.source.outputs.ready == 'true' && vars.CLI_EDGE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+      attestations: read
+    env:
+      BUILD_RUN_ID: ${{ needs.source.outputs.run_id }}
+      BUILD_RUN_ATTEMPT: ${{ needs.source.outputs.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli-edge-candidate-${{ needs.source.outputs.run_attempt }}
+          path: payload
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.source.outputs.run_id }}
+      - name: Recheck eligibility and publish the exact qualified files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLI_EDGE_ENABLED: ${{ vars.CLI_EDGE_ENABLED }}
+        run: python3 scripts/edge_release.py publish payload

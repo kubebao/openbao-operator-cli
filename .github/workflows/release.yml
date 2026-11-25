@@ -2,6 +2,20 @@ name: Release
 
 # A tag push never publishes. Rehearsals are the default manual operation.
 on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      publish:
+        default: false
+        type: boolean
+      apple_signing:
+        default: false
+        type: boolean
+      release_please_draft:
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -14,6 +28,10 @@ on:
         type: boolean
       apple_signing:
         description: Sign and notarize macOS binaries (requires Apple credentials)
+        default: false
+        type: boolean
+      release_please_draft:
+        description: Finalize an empty draft created by the CLI release App
         default: false
         type: boolean
 
@@ -43,6 +61,7 @@ jobs:
           KUBEBAO_PUBLISH: ${{ inputs.publish }}
           CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
           KUBEBAO_NOTARIZE: ${{ inputs.apple_signing }}
+          RELEASE_PLEASE_DRAFT: ${{ inputs.release_please_draft }}
         run: python3 scripts/release_policy.py "$TAG"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -58,11 +77,13 @@ jobs:
         if: ${{ inputs.publish && !inputs.apple_signing }}
         env:
           KUBEBAO_NOTARIZE: "false"
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
         run: make release-dist
       - name: Build signed artifacts
         if: ${{ inputs.apple_signing }}
         env:
           KUBEBAO_NOTARIZE: "true"
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
           MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
@@ -122,7 +143,9 @@ jobs:
           spctl --assess --type execute --verbose=2 signed-binary/kubebao
 
   publish:
-    if: ${{ inputs.publish && vars.CLI_RELEASES_ENABLED == 'true' && !github.event.repository.private }}
+    if: >-
+      inputs.publish && vars.CLI_RELEASES_ENABLED == 'true' && !github.event.repository.private &&
+      github.repository == 'kubebao/openbao-operator-cli'
     needs: [build, runtime]
     runs-on: ubuntu-24.04
     environment: release
@@ -159,4 +182,5 @@ jobs:
           KUBEBAO_PUBLISH: "true"
           CLI_RELEASES_ENABLED: ${{ vars.CLI_RELEASES_ENABLED }}
           KUBEBAO_NOTARIZE: ${{ inputs.apple_signing }}
+          RELEASE_PLEASE_DRAFT: ${{ inputs.release_please_draft }}
         run: python3 scripts/publish_release.py "$TAG" payload

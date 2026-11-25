@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/rehearsal.yml
+      - .github/workflows/release.yml
+      - .github/workflows/publish-edge.yml
       - .goreleaser.yaml
       - packaging/**
       - scripts/dist.sh
@@ -14,6 +16,9 @@ on:
       - scripts/verify_homebrew.py
       - scripts/verify_homebrew.rb
       - scripts/release-tool.sh
+      - scripts/edge_release.py
+      - scripts/release_policy.py
+      - scripts/publish_release.py
 
 permissions:
   contents: read

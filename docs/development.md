@@ -115,6 +115,11 @@ immutable releases, and a protected environment. Apple signing is a separate opt
 same archived binaries and rebuilds the source on all four platforms; macOS jobs also exercise the formula.
 Package promotion has a separate gate and opens PRs without merging them. See [release procedures](releases.md).
 
+Main checks also retain an attested edge candidate. The separately gated Publish Edge workflow qualifies those exact
+archives natively and publishes them without rebuilding. Release Please uses the CLI release App to maintain version
+PRs and create tagged drafts. CI requires reviewed release notes before a version PR can merge. All publication gates
+remain disabled until separately approved.
+
 Actions are pinned to commit SHAs. Dependabot proposes weekly Go and GitHub Actions updates.
 
 CodeQL and dependency review run automatically for public repositories. For a private repository, an administrator must

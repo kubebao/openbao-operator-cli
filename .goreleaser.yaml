@@ -72,7 +72,7 @@ snapshot:
   version_template: '{{ .Env.KUBEBAO_VERSION }}'
 
 # Artifact generation never writes to GitHub or package repositories.
-# The manual release workflow publishes the verified files separately.
+# Release workflows publish the verified files separately.
 release:
   disable: true
 changelog:
